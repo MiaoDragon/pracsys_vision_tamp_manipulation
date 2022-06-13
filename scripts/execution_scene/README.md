@@ -1,0 +1,1 @@
+```real_scene.py``` and ```sim_scene.py``` follow the same ROS interface, so task planner can use the same ROS calls to interact with the execution scene.

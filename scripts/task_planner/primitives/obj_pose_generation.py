@@ -6,7 +6,7 @@ import numpy as np
 import transformations as tf
 import collision_utils
 import pybullet as p
-from visual_utilities import *
+from utils.visual_utils import *
 import open3d as o3d
 
 def generate_start_poses(obj_id, obj, robot, workspace, occlusion, occlusion_label, occupied_label, sample_n=10):

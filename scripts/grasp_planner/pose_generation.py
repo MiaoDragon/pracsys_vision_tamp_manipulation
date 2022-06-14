@@ -2,7 +2,7 @@
 generate grasp/suction poses given object geometry input
 """
 import numpy as np
-from visual_utilities import *
+from utils.visual_utils import *
 import open3d as o3d
 import transformations as tf
 import pybullet as p

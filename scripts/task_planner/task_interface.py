@@ -14,7 +14,7 @@ import rospy
 import json
 from task_planner.task_planner import TaskPlanner
 
-from pracsys_vision_tamp_manipulation.srv import TaskSolve
+from pracsys_vision_tamp_manipulation.srv import TaskSolve, TaskSolveResponse
 
 class TaskInterface():
     def __init__(self):
@@ -29,7 +29,12 @@ class TaskInterface():
     def get_rosparam(self):
         while not rospy.has_param('/task_interface/scene_name'):
             rospy.sleep(0.2)
-        self.scene_name = scene_name = rospy.get_param('/task_interface/scene_name')
+        self.scene_name = rospy.get_param('/task_interface/scene_name')
         while not rospy.has_param('/task_interface/prob_id'):
             rospy.sleep(0.2)
-        self.prob_id = scene_name = rospy.get_param('/task_interface/prob_id')
+        self.prob_id = rospy.get_param('/task_interface/prob_id')
+
+    def solve_fb(self, req):
+        # use the task planner to solve the problem
+        res = self.task_planner.solve()
+        response = TaskSolveResponse(res)

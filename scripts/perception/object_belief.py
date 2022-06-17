@@ -5,12 +5,12 @@ An extension can use model-based version of it. belief_scene.py also needs to be
 accordingly.
 """
 import numpy as np
-from visual_utilities import *
+from utils.visual_utils import *
 import open3d as o3d
 
 DEBUG = False
 
-class ObjectModel():
+class ObjectBelief():
     def __init__(self, obj_id, pybullet_id, xmin, ymin, zmin, xmax, ymax, zmax, resol, scale=0.03, use_color=False):
         """
         initialize the object model to be the bounding box containing the conservative volume of the object
@@ -695,7 +695,7 @@ class ObjectModel():
 
 def test():
     # test the module
-    object = ObjectModel(0.0, 0.0, 0.0, 1.000, 1.000, 1.000, [0.01,0.01,0.01], 0.05)
+    object = ObjectBelief(0.0, 0.0, 0.0, 1.000, 1.000, 1.000, [0.01,0.01,0.01], 0.05)
 
     object.tsdf = object.tsdf + 1.0
     

@@ -2,11 +2,10 @@
 a representation of the belief in the scene. This encodes the occlusion and collision space.
 """
 
-from enum import unique
 import numpy as np
 import cv2
 import open3d as o3d
-from visual_utilities import *
+from utils.visual_utils import *
 
 class SceneBelief():
     def __init__(self, world_x, world_y, world_z, resol, x_base, y_base, z_base, x_vec, y_vec, z_vec):

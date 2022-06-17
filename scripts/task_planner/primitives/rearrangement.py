@@ -6,8 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import heapq
 import transformations as tf
-import pose_generation
-import collision_utils
+from . import obj_pose_generation
+import motion_planner.collision_check as collision_utils
 from utils.visual_utils import *
 import open3d as o3d
 import rospy
@@ -224,7 +224,7 @@ class Rearrangement():
         # o3d.visualization.draw_geometries([voxel, obj_pcd])
         
         start_time = time.time()
-        pts, poses_in_obj, joints = pose_generation.grasp_pose_generation(obj, robot, workspace, collision_transform, collision_voxel, voxel_resol, sample_n=20, visualize=False)
+        pts, poses_in_obj, joints = obj_pose_generation.grasp_pose_generation(obj, robot, workspace, collision_transform, collision_voxel, voxel_resol, sample_n=20, visualize=False)
         # if len(poses_in_obj) == 0:
         #     pts, poses_in_obj, joints = pose_generation.grasp_pose_generation(obj, robot, workspace, collision_transform, collision_voxel, voxel_resol, sample_n=20, visualize=True)
 

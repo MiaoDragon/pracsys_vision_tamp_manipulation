@@ -1,13 +1,19 @@
 """
 provide helper functions for the primitives
 """
-import pose_generation
+from grasp_planner import pose_generation
 import numpy as np
 import transformations as tf
-import collision_utils
+import motion_planner.collision_check as collision_utils
 import pybullet as p
 from utils.visual_utils import *
 import open3d as o3d
+
+def grasp_pose_generation(obj, robot, workspace, col_transform, col_voxel, col_resol, sample_n=10, result_n=20, visualize=False):
+    # relay
+    return pose_generation.grasp_pose_generation(obj, robot, workspace, 
+                                                col_transform, col_voxel, col_resol, 
+                                                sample_n, result_n, visualize)
 
 def generate_start_poses(obj_id, obj, robot, workspace, occlusion, occlusion_label, occupied_label, sample_n=10):
     """
@@ -631,7 +637,6 @@ def mask_pcd_xy_with_padding(occ_filter, pcd_indices, padding=1):
 
     return masked_occ_filter
 
-import pose_generation
 def obtain_reachability_robot_mask(target_obj, occlusion, robot, workspace):
     """
     return a list:

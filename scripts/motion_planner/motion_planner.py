@@ -23,7 +23,7 @@ from moveit_msgs.msg import RobotState, DisplayRobotState
 from sensor_msgs.msg import JointState
 import sys
 
-from visual_utilities import *
+from utils.visual_utils import *
 import open3d as o3d
 
 from geometry_msgs.msg import Pose, Point

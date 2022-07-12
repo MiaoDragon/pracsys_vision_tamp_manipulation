@@ -15,6 +15,9 @@ import time
 from .rearrangement import Rearrangement
 from . import utils, obj_pose_generation
 import cv2
+from utils.visual_utils import *
+
+
 class PrimitivePlanner():
     def __init__(self, scene, perception_system, execution):
         """
@@ -46,7 +49,8 @@ class PrimitivePlanner():
     def plan_to_suction_pose(self, obj, suction_pose_in_obj, suction_joint, start_joint_dict):
         # self.motion_planner = motion_planner.MotionPlanner(self.scene.robot, self.scene.workspace)
         suction_joint_dict_list = self.motion_planner.suction_plan(start_joint_dict, obj.transform.dot(suction_pose_in_obj), 
-                                                                    suction_joint, self.scene.robot, workspace=self.scene.workspace)
+                                                                    suction_joint, self.scene.robot, workspace=self.scene.workspace,
+                                                                    display=False)
         if len(suction_joint_dict_list) == 0:
             return [], []
             # return [], []
@@ -57,10 +61,11 @@ class PrimitivePlanner():
         # print('start joint angle: ')
         # print(self.scene.robot.joint_dict_to_vals(suction_joint_dict_list[-1]))
         joint_dict_list = self.motion_planner.straight_line_motion(suction_joint_dict_list[-1], obj.transform.dot(suction_pose_in_obj), 
-                                                                relative_tip_pose, self.scene.robot, workspace=self.scene.workspace)
+                                                                relative_tip_pose, self.scene.robot, workspace=self.scene.workspace,
+                                                                display=False)
         # print('straight-line motion, len(joint_dict_list): ', len(joint_dict_list))
         # input('waiting...')
-        if len(joint_dict_list) == 0:
+        if len(joint_dict_list) <= 0:
             return [], []
 
         return suction_joint_dict_list, joint_dict_list
@@ -80,7 +85,8 @@ class PrimitivePlanner():
 
             # self.motion_planner.clear_octomap()
             joint_dict_list = self.motion_planner.straight_line_motion(start_joint_dict, current_tip_pose, relative_tip_pose, self.scene.robot,
-                                                                    collision_check=False, workspace=self.scene.workspace)
+                                                                    collision_check=False, workspace=self.scene.workspace,
+                                                                    display=False)
 
 
             intermediate_joint_dict_list_1 = joint_dict_list
@@ -103,15 +109,17 @@ class PrimitivePlanner():
 
         return intermediate_joint_dict_list
 
-    def obj_sense_plan(self, obj, joint_angles, tip_pose_in_obj):
-
-        joint_dict_list = self.motion_planner.suction_with_obj_plan(self.scene.robot.joint_dict, tip_pose_in_obj, joint_angles, self.scene.robot, obj)
-
+    def obj_sense_plan(self, obj, joint_angles, tip_pose_in_obj, start_joint_dict=None):
+        if start_joint_dict is None:
+            joint_dict_list = self.motion_planner.suction_with_obj_plan(self.scene.robot.joint_dict, tip_pose_in_obj, joint_angles, self.scene.robot, obj)
+        else:
+            joint_dict_list = self.motion_planner.suction_with_obj_plan(start_joint_dict, tip_pose_in_obj, joint_angles, self.scene.robot, obj)
         return joint_dict_list
 
     def plan_to_placement_pose(self, obj, tip_pose_in_obj, 
                                 intermediate_joint, intermediate_joint_dict_list, 
-                                lift_up_joint_dict_list, suction_joint_dict_list):
+                                lift_up_joint_dict_list, suction_joint_dict_list,
+                                start_joint_dict):
         # ** loop until the object is put back
         object_put_back = False
         while True:
@@ -125,7 +133,7 @@ class PrimitivePlanner():
 
                 # do a motion planning to current sense pose
 
-                joint_dict_list = self.motion_planner.suction_with_obj_plan(self.scene.robot.joint_dict, tip_pose_in_obj, intermediate_joint, self.scene.robot, obj)
+                joint_dict_list = self.motion_planner.suction_with_obj_plan(start_joint_dict, tip_pose_in_obj, intermediate_joint, self.scene.robot, obj)
                 if len(joint_dict_list) == 0:
                     continue
                 placement_joint_dict_list = joint_dict_list + intermediate_joint_dict_list[::-1] + lift_up_joint_dict_list[::-1]
@@ -330,12 +338,43 @@ class PrimitivePlanner():
 
 
     def sense_object(self, obj_id, camera, robot_ids, component_ids):
-        start_time = time.time()
-        color_img, depth_img, seg_img = self.execution.get_image()
-        self.perception.sense_object(obj_id, color_img, depth_img, seg_img, 
-                                    self.scene.camera, [self.scene.robot.robot_id], self.scene.workspace.component_ids)
-        self.perception_time += time.time() - start_time
-        self.perception_calls += 1
+        # sense & perceive
+        # wait for image to update
+        v_pcds = []
+        for obj_id, obj in self.perception.objects.items():
+            v_pcd = obj.sample_conservative_pcd()
+            v_pcd = obj.transform[:3,:3].dot(v_pcd.T).T + obj.transform[:3,3]
+            # v_pcd = occlusion.world_in_voxel_rot.dot(v_pcd.T).T + occlusion.world_in_voxel_tran
+            # v_pcd = v_pcd / occlusion.resol
+            v_color = np.zeros(v_pcd.shape)
+            v_color[:,0] = 1
+            v_color[:,1] = 0
+            v_color[:,2] = 0
+            v_pcds.append(visualize_pcd(v_pcd, v_color))
+
+
+            mask = (obj.tsdf_count == 0)
+            unseen_pcd = obj.sample_pcd(mask)
+            unseen_pcd = obj.transform[:3,:3].dot(unseen_pcd.T).T + obj.transform[:3,3]
+            # v_pcd = occlusion.world_in_voxel_rot.dot(v_pcd.T).T + occlusion.world_in_voxel_tran
+            # v_pcd = v_pcd / occlusion.resol
+            unseen_color = np.zeros(unseen_pcd.shape)
+            unseen_color[:,0] = 0
+            unseen_color[:,1] = 1
+            unseen_color[:,2] = 0
+            v_pcds.append(visualize_pcd(unseen_pcd, unseen_color))
+
+
+
+        o3d.visualization.draw_geometries(v_pcds)
+        # input('press to start...')
+        pass
+        # start_time = time.time()
+        # color_img, depth_img, seg_img = self.execution.get_image()
+        # self.perception.sense_object(obj_id, color_img, depth_img, seg_img, 
+        #                             self.scene.camera, [self.scene.robot.robot_id], self.scene.workspace.component_ids)
+        # self.perception_time += time.time() - start_time
+        # self.perception_calls += 1
 
     def pre_move_compute_valid_joints(self, target_obj_i, moved_objects, blocking_mask):
         target_obj = self.perception.objects[target_obj_i]
@@ -655,13 +694,32 @@ class PrimitivePlanner():
     def pipeline_sim(self):
         # sense & perceive
         # wait for image to update
-        color_img, depth_img, seg_img = self.execution.get_image()
-        start_time = time.time()
-        self.perception.pipeline_sim(color_img, depth_img, seg_img, self.scene.camera, 
-                                    [self.scene.robot.robot_id], self.scene.workspace.component_ids)
+        v_pcds = []
+        for obj_id, obj in self.perception.objects.items():
+            v_pcd = obj.sample_conservative_pcd()
+            v_pcd = obj.transform[:3,:3].dot(v_pcd.T).T + obj.transform[:3,3]
+            # v_pcd = occlusion.world_in_voxel_rot.dot(v_pcd.T).T + occlusion.world_in_voxel_tran
+            # v_pcd = v_pcd / occlusion.resol
+            v_color = np.zeros(v_pcd.shape)
+            v_color[:,0] = 1
+            v_color[:,1] = 0
+            v_color[:,2] = 0
+            v_pcds.append(visualize_pcd(v_pcd, v_color))
+        o3d.visualization.draw_geometries(v_pcds)
+        # input('press to start...')
 
-        self.perception_time += time.time() - start_time
-        self.perception_calls += 1
+
+        # pass  # do continuously in execution_interface
+        # color_img, depth_img, seg_img = self.execution.get_image()
+        # start_time = time.time()
+        # self.perception.pipeline_sim(color_img, depth_img, seg_img, self.scene.camera, 
+        #                             [self.scene.robot.robot_id], self.scene.workspace.component_ids)
+
+        # self.perception_time += time.time() - start_time
+        # self.perception_calls += 1
+
+
+
 
     def move_and_sense_precheck(self, move_obj_idx, moved_objects):
         start_time = time.time()
@@ -711,6 +769,8 @@ class PrimitivePlanner():
 
         # self.set_collision_env_with_mask(collision_voxel, [move_obj_idx], 
         #                                 [self.perception.objects[move_obj_idx].transform], padding=3)
+        self.set_collision_env(list(self.perception.filtered_occluded_dict.keys()), 
+                                [move_obj_idx], [move_obj_idx], padding=3)
 
         print('number of suction_poses_in_obj: ', len(suction_poses_in_obj))
         if len(suction_poses_in_obj) == 0:
@@ -784,6 +844,7 @@ class PrimitivePlanner():
             
         self.pipeline_sim()  # sense the environmnet
 
+        last_joint_dict = retreat_joint_dict_list[-1]
         for k in range(6):
             planning_info = dict()
             planning_info['obj_i'] = move_obj_idx
@@ -791,7 +852,7 @@ class PrimitivePlanner():
             planning_info['occlusion'] = self.perception.occlusion
             planning_info['workspace'] = self.scene.workspace
             planning_info['selected_tip_in_obj'] = suction_pose_in_obj
-            planning_info['joint_dict'] = self.scene.robot.joint_dict
+            planning_info['joint_dict'] = last_joint_dict
 
             planning_info['robot'] = self.scene.robot
             planning_info['occluded_label'] = self.perception.filtered_occlusion_label
@@ -810,8 +871,10 @@ class PrimitivePlanner():
             self.pose_generation_calls += 1
             print('sample sense pose takes time: ', time.time() - start_time)
             start_time = time.time()
-            obj_sense_joint_dict_list = self.obj_sense_plan(self.perception.objects[move_obj_idx], joint_angles, suction_pose_in_obj)
+            obj_sense_joint_dict_list = self.obj_sense_plan(self.perception.objects[move_obj_idx], joint_angles, suction_pose_in_obj, last_joint_dict)
             end_time = time.time()
+
+
             self.motion_planning_time += end_time - start_time
             self.motion_planning_calls += 1                
             print('obj_sense_plan takes time: ', end_time - start_time)
@@ -823,13 +886,21 @@ class PrimitivePlanner():
             end_time = time.time()
             print('sense_object takes time: ', end_time - start_time)
 
+ 
             if len(obj_sense_joint_dict_list) == 0:
                 continue
 
             # rotate the object 360 degrees so we get a better sensing
+            last_joint_dict = obj_sense_joint_dict_list[-1]
+            complete = self.perception.objects[move_obj_idx].check_complete()
+            if complete:
+                break
+
+
             ul = self.scene.robot.upper_lim[7]
             ll = self.scene.robot.lower_lim[7]
-            current_angle = self.scene.robot.joint_vals[7]
+            current_angle = last_joint_dict[self.scene.robot.joint_names[7]]
+            # current_angle = self.scene.robot.joint_vals[7]
             waypoint1 = current_angle + np.pi/2
             waypoint2 = current_angle + np.pi
             waypoint3 = current_angle - np.pi/2
@@ -841,29 +912,45 @@ class PrimitivePlanner():
             waypoint3 = utils.wrap_angle(waypoint3, ll, ul)
 
             # generate rotation trajectory
-            last_joint_dict = obj_sense_joint_dict_list[-1]
             traj1 = utils.generate_rot_traj(self.scene.robot.joint_names[7], last_joint_dict, waypoint1)
             self.execution.execute_traj(traj1)
             # self.pipeline_sim()
             self.sense_object(move_obj_idx, self.scene.camera, [self.scene.robot.robot_id], self.scene.workspace.component_ids)
+
+            last_joint_dict = traj1[-1]
+            complete = self.perception.objects[move_obj_idx].check_complete()
+            if complete:
+                break
 
 
             traj2 = utils.generate_rot_traj(self.scene.robot.joint_names[7], traj1[-1], waypoint2)
             self.execution.execute_traj(traj2)
             # self.pipeline_sim()
             self.sense_object(move_obj_idx, self.scene.camera, [self.scene.robot.robot_id], self.scene.workspace.component_ids)
+            last_joint_dict = traj2[-1]
+            complete = self.perception.objects[move_obj_idx].check_complete()
+            if complete:
+                break
+
+
 
             traj3 = utils.generate_rot_traj(self.scene.robot.joint_names[7], traj2[-1], waypoint3)
             self.execution.execute_traj(traj3)
             # self.pipeline_sim()
             self.sense_object(move_obj_idx, self.scene.camera, [self.scene.robot.robot_id], self.scene.workspace.component_ids)
+            last_joint_dict = traj3[-1]
+            complete = self.perception.objects[move_obj_idx].check_complete()
+            if complete:
+                break
 
 
             traj4 = utils.generate_rot_traj(self.scene.robot.joint_names[7], traj3[-1], current_angle)
             self.execution.execute_traj(traj4)
-
-            self.perception.objects[move_obj_idx].set_sensed()
-            # self.pipeline_sim()
+            last_joint_dict = traj4[-1]
+            complete = self.perception.objects[move_obj_idx].check_complete()
+            if complete:
+                break
+        self.perception.objects[move_obj_idx].set_sensed()
 
         planning_info = dict()
         planning_info['tip_pose_in_obj'] = action_info['tip_pose_in_obj']
@@ -873,6 +960,7 @@ class PrimitivePlanner():
         planning_info['lift_up_joint_dict_list'] = action_info['lift_up_joint_dict_list']
         planning_info['suction_joint_dict_list'] = action_info['suction_joint_dict_list']
         planning_info['obj'] = action_info['obj']
+        planning_info['start_joint_dict'] = last_joint_dict
 
         start_time = time.time()
         placement_joint_dict_list, reset_joint_dict_list = self.plan_to_placement_pose(**planning_info)
@@ -885,5 +973,5 @@ class PrimitivePlanner():
         self.execution.detach_obj()
 
         self.execution.execute_traj(reset_joint_dict_list, self.perception.data_assoc.obj_ids_reverse[move_obj_idx])
-
+        return True
 

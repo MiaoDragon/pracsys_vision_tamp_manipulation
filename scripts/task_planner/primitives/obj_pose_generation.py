@@ -271,7 +271,10 @@ def sample_sense_pose(obj_i, objects,
             # joint dict to joint list
             start_suction_joint = []
             for i in range(len(robot.joint_names)):
-                start_suction_joint.append(joint_dict[robot.joint_names[i]])
+                if robot.joint_names[i] in joint_dict:
+                    start_suction_joint.append(joint_dict[robot.joint_names[i]])
+                else:
+                    start_suction_joint.append(robot.joint_vals[i])
 
             quat = tf.quaternion_from_matrix(transformed_tip)  # w x y z
 

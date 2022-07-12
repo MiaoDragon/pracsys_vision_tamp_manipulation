@@ -80,6 +80,7 @@ class TaskPlanner():
         self.rearrange_calls = 0
 
         self.pipeline_sim()
+        input('press to start...')
         self.num_executed_actions = 0
         self.num_collision = 0
     
@@ -202,6 +203,7 @@ def main():
     
     task_planner = TaskPlanner(scene_name, prob_id)
     # input('ENTER to start planning...')
+    print('pid: ', task_planner.scene.pid)
     task_planner.run_pipeline()
 
 if __name__ == "__main__":

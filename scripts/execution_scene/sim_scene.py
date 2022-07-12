@@ -9,6 +9,7 @@ import problem_generation as prob_gen
 from utils.visual_utils import *
 from pracsys_vision_tamp_manipulation.srv import AttachObject, ExecuteTrajectory, \
                                     AttachObjectResponse, ExecuteTrajectoryResponse
+from pracsys_vision_tamp_manipulation.msg import RobotState
 
 import rospy
 from sensor_msgs.msg import Image, JointState
@@ -19,6 +20,8 @@ import transformations as tf
 import pickle
 import json
 import os, rospkg
+
+from threading import Lock
 
 class ExecutionSystem():
     def __init__(self, load=None, scene_name='scene1'):
@@ -123,6 +126,10 @@ class ExecutionSystem():
         self.bridge = CvBridge()
 
         self.attached_obj_id = None
+        self.attached_obj_pose = None
+        self.ee_transform = None
+        self.obj_delta_transform = None
+        lock = Lock()
         # * initialize ROS services
         # - robot trajectory tracker
         rospy.Service("execute_trajectory", ExecuteTrajectory, self.execute_trajectory)
@@ -131,10 +138,18 @@ class ExecutionSystem():
         # * initialize ROS pubs and subs
         # - camera
         # - robot_state_publisher
+
+
+        self.rgb_img, self.depth_img, self.seg_img = self.camera.sense()
+        self.robot_state = self.robot.joint_dict
+
         self.rgb_cam_pub = rospy.Publisher('rgb_image', Image)
         self.depth_cam_pub = rospy.Publisher('depth_image', Image)
         self.seg_cam_pub = rospy.Publisher('seg_image', Image)
-        self.rs_pub = rospy.Publisher('robot_state_publisher', JointState)
+        self.rs_pub = rospy.Publisher('robot_state_publisher', RobotState)
+        self.js_pub = rospy.Publisher('joint_states', JointState)
+
+        self.timer = rospy.Timer(rospy.Duration(0.01), self.publish_joint_state)
 
         # self.done_sub = rospy.Subscriber('done_msg', Int32, self.done_callback)
 
@@ -208,46 +223,95 @@ class ExecutionSystem():
         joint_names = traj.joint_names
         points = traj.points
         num_collision = 0
-        if self.attached_obj_id is not None:
-            # compute initial transformation of object and robot link
-            transform = self.robot.get_tip_link_pose()
-
-            link_state = p.getBasePositionAndOrientation(self.attached_obj_id, physicsClientId=self.robot.pybullet_id)
-            pos = link_state[0]
-            ori = link_state[1]
-            obj_transform = tf.quaternion_matrix([ori[3],ori[0],ori[1],ori[2]])
-            obj_transform[:3,3] = pos
-
+        # TODO: add a tracker for more realistic movements
+        # interpolation of trajectory with small step size
+        received_pts = []
         for i in range(len(points)):
-            pos = points[i].positions
-            time_from_start = points[i].time_from_start
+            received_pts.append(points[i].positions)
+        np.savetxt('received-pts.txt', np.array(received_pts))
+        
+        step_sz = 1 * np.pi / 180
+        interpolated_pts = [traj.points[0].positions]
+        
+        for i in range(len(points)-1):
+            pos1 = np.array(points[i].positions)
+            pos2 = np.array(points[i+1].positions)
+            abs_change = np.abs(pos2 - pos1)
+            n_steps = int(np.ceil(abs_change.max() / step_sz))
+            interpolated_pts += np.linspace(start=pos1, stop=pos2, num=n_steps+1)[1:].tolist()
+
+        # print('interpolated points: ')
+        # print(interpolated_pts)
+        np.savetxt('interpolated-pts.txt', np.array(interpolated_pts))
+
+        for i in range(len(interpolated_pts)):
+            pos = interpolated_pts[i]
+            # time_from_start = points[i].time_from_start
             joint_dict = {joint_names[j]: pos[j] for j in range(len(pos))}
             self.robot.set_joint_from_dict(joint_dict)
 
             if self.attached_obj_id is not None:
-                new_transform = self.robot.get_tip_link_pose()
-                rel_transform = new_transform.dot(np.linalg.inv(transform))
-                new_obj_transform = rel_transform.dot(obj_transform)
+                transform = self.robot.get_tip_link_pose()
+                new_obj_transform = transform.dot(self.robot.attached_obj_rel_pose)
                 quat = tf.quaternion_from_matrix(new_obj_transform) # w x y z
                 p.resetBasePositionAndOrientation(self.attached_obj_id, new_obj_transform[:3,3], [quat[1],quat[2],quat[3],quat[0]], 
                                                     physicsClientId=self.robot.pybullet_id)
-                transform = new_transform
-                obj_transform = new_obj_transform
                 if self.check_collision(ignored_obj_id):
                     num_collision += 1
                     print('collision happened.')
+
+        
+            # update images and robot state
+            self.rgb_img, self.depth_img, self.seg_img = self.camera.sense()
+            self.robot_state = self.robot.joint_dict
+            if self.attached_obj_id is not None:
+                self.ee_transform = transform
+                self.obj_delta_transform = new_obj_transform.dot(np.linalg.inv(self.attached_obj_pose))
+
+
+
+            rospy.sleep(0.01)
+
         # input('waiting...')
             # rospy.sleep(0.03)
         return ExecuteTrajectoryResponse(num_collision, True)
+
+
+    def get_body_transform(self, bid):
+        # obtain the transformation matrix of the body bid: world T bid
+        link_state = p.getBasePositionAndOrientation(bid, physicsClientId=self.robot.pybullet_id)
+        pos = link_state[0]
+        ori = link_state[1]
+        transform = tf.quaternion_matrix([ori[3],ori[0],ori[1],ori[2]])
+        transform[:3,3] = pos
+        return transform
 
     def attach_object(self, req):
         """
         attach the object closest to the robot
         """
         if req.attach == True:
+            obj_transform = self.get_body_transform(req.obj_id)
+            self.attached_obj_pose = obj_transform
+            # obtain relative transform to robot ee
+            ee_transform = self.robot.get_tip_link_pose()
+            obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
+            self.robot.attach(req.obj_id, obj_rel_transform)
+
+            # initialize delta_transform
+            self.ee_transform = ee_transform
+            self.obj_delta_transform = np.eye(4)
             self.attached_obj_id = req.obj_id
+
+            # compute the ee T obj (pose)
+
+
         else:
+            self.robot.detach()
             self.attached_obj_id = None
+            self.attached_obj_pose = None
+            self.ee_transform = None
+            self.obj_delta_transform = None
 
         return AttachObjectResponse(True)
 
@@ -255,25 +319,57 @@ class ExecutionSystem():
         """
         obtain image from PyBullet and publish
         """
-        rgb_img, depth_img, seg_img = self.camera.sense()
-        msg = self.bridge.cv2_to_imgmsg(rgb_img, 'passthrough')
+        msg = self.bridge.cv2_to_imgmsg(self.rgb_img, 'passthrough')
+        msg.header.stamp = rospy.Time.now()
         self.rgb_cam_pub.publish(msg)
 
-        msg = self.bridge.cv2_to_imgmsg(depth_img, 'passthrough')
+        msg = self.bridge.cv2_to_imgmsg(self.depth_img, 'passthrough')
+        msg.header.stamp = rospy.Time.now()
         self.depth_cam_pub.publish(msg)
 
-        msg = self.bridge.cv2_to_imgmsg(seg_img, 'passthrough')
+        msg = self.bridge.cv2_to_imgmsg(self.seg_img, 'passthrough')
+        msg.header.stamp = rospy.Time.now()
         self.seg_cam_pub.publish(msg)
         
     def publish_robot_state(self):
         """
         obtain joint state from PyBullet and publish
         """
+        
+        msg = RobotState()
+        for name, val in self.robot_state.items():
+            msg.joint_state.name.append(name)
+            msg.joint_state.position.append(val)
+        if self.attached_obj_id is None:
+            msg.attached_obj = -1
+        else:
+            msg.attached_obj = self.attached_obj_id
+            # ee_transform = self.robot.get_tip_link_pose_urdfpy()
+            # attached_obj_pose = ee_transform.dot(self.robot.attached_obj_rel_pose)
+            delta_transform = self.obj_delta_transform
+            # delta_transform = attached_obj_pose.dot(np.linalg.inv(self.attached_obj_pose))
+            qw,qx,qy,qz = tf.quaternion_from_matrix(delta_transform)
+            x = delta_transform[0,3]
+            y = delta_transform[1,3]
+            z = delta_transform[2,3]
+            msg.delta_transform.rotation.w = qw
+            msg.delta_transform.rotation.x = qx
+            msg.delta_transform.rotation.y = qy
+            msg.delta_transform.rotation.z = qz
+            msg.delta_transform.translation.x = x
+            msg.delta_transform.translation.y = y
+            msg.delta_transform.translation.z = z
+        msg.header.stamp = rospy.Time.now()
+        self.rs_pub.publish(msg)
+
+    def publish_joint_state(self, timer):
         msg = JointState()
-        for name, val in self.robot.joint_dict.items():
+        for name, val in self.robot_state.items():
             msg.name.append(name)
             msg.position.append(val)
-        self.rs_pub.publish(msg)
+        msg.header.stamp = rospy.Time.now()
+        self.js_pub.publish(msg)
+
 
     def run(self):
         """
@@ -301,6 +397,16 @@ def main():
     else:
         load = None
     execution_system = ExecutionSystem(load, scene_name)
+    # start_time = time.time()
+    # res = execution_system.robot.get_tip_link_pose()
+    # print('pybullet takes time: ', time.time() - start_time)
+    # print(res)
+
+    # start_time = time.time()
+    # res = execution_system.robot.get_tip_link_pose_urdfpy()
+    # print('urdfpy takes time: ', time.time() - start_time)
+    # print(res)
+    print('pid: ', execution_system.pid)
     execution_system.run()
 
 if __name__ == "__main__":

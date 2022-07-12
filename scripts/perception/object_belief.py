@@ -4,6 +4,10 @@ This implements the model-free version, which is through TSDF reconstruction of 
 An extension can use model-based version of it. belief_scene.py also needs to be changed
 accordingly.
 """
+import sys
+
+sys.path.insert(0,'/home/yinglong/Documents/research/task_motion_planning/infrastructure/motoman_ws/src/pracsys_vision_tamp_manipulation/scripts')
+
 import numpy as np
 from utils.visual_utils import *
 import open3d as o3d
@@ -43,8 +47,9 @@ class ObjectBelief():
         self.size_x = size_x
         self.size_y = size_y
         self.size_z = size_z
-
-        self.tsdf = np.zeros((size_x,size_y,size_z))  # default value: -1
+        
+        self.tsdf_default = 0#-np.inf
+        self.tsdf = np.zeros((size_x,size_y,size_z)) + self.tsdf_default  # default value: -1
         self.tsdf_count = np.zeros((size_x,size_y,size_z)).astype(int)  # count how many times it's observed
         self.use_color = use_color
         if use_color:
@@ -55,8 +60,9 @@ class ObjectBelief():
 
         self.scale = scale
         self.max_v = scale#1.0
-        self.min_v = -scale * 1.1  # increase this so our optimistic model can have more volume
+        self.min_v = -scale * 1.3  # increase this so our optimistic model can have more volume
         self.active = 0
+        self.threshold = 1
         # 0 means this object might be hidden by others. 1 means we can safely move the object now
         # we will only expand the object tsdf volume when it's hidden. Once it's active we will keep
         # the tsdf volume fixed
@@ -85,13 +91,12 @@ class ObjectBelief():
         self.obj_hide_set = self.obj_hide_set.union(set(obj_hide_set))
 
     def get_optimistic_model(self):
-        threshold = 1
-        return (self.tsdf_count >= threshold) & (self.tsdf < self.max_v) & (self.tsdf > self.min_v)
+        
+        return (self.tsdf_count >= self.threshold) & (self.tsdf < self.max_v) & (self.tsdf > self.min_v)
     
     def get_conservative_model(self):
         # unseen parts below to the conservative model
-        threshold = 1
-        return (self.tsdf_count < threshold) | ((self.tsdf_count >= threshold) & (self.tsdf < self.max_v))
+        return (self.tsdf_count < self.threshold) | ((self.tsdf_count >= self.threshold) & (self.tsdf < self.max_v))
 
     def set_active(self):
         # when the object is no longer hidden by others, it can move
@@ -100,10 +105,16 @@ class ObjectBelief():
     def set_sensed(self):
         self.sensed = 1
     
+    def update_transform(self, transform):
+        self.transform = transform
+        self.world_in_voxel = np.linalg.inv(self.transform)
+        self.world_in_voxel_rot = self.world_in_voxel[:3,:3]
+        self.world_in_voxel_tran = self.world_in_voxel[:3,3]
+
     def update_transform_from_relative(self, rel_transform):
         # when the object is moved, update the transform
         # previous: W T O1
-        # relative transform: 02 T O1
+        # relative transform: delta T
         self.transform = rel_transform.dot(self.transform)
         self.world_in_voxel = np.linalg.inv(self.transform)
         self.world_in_voxel_rot = self.world_in_voxel[:3,:3]
@@ -163,7 +174,7 @@ class ObjectBelief():
             return
         
 
-        new_tsdf = np.zeros((new_size_x, new_size_y, new_size_z))
+        new_tsdf = np.zeros((new_size_x, new_size_y, new_size_z)) + self.tsdf_default
         new_tsdf_count = np.zeros((new_size_x, new_size_y, new_size_z)).astype(int)
             
         new_tsdf[nx:nx+self.size_x,ny:ny+self.size_y,nz:nz+self.size_z] = self.tsdf
@@ -266,88 +277,57 @@ class ObjectBelief():
 
         # print('tsdf: ')
         # print(((tsdf[valid_space]>self.min_v) & (tsdf[valid_space]<self.max_v)).astype(int).sum() / valid_space.astype(int).sum())
+        update_tsdf = np.array(self.tsdf)
+        update_tsdf_count = np.array(self.tsdf_count).astype(int)
+        # update_tsdf[valid_space] = (update_tsdf[valid_space] * update_tsdf_count[valid_space] + \
+        #                             tsdf[valid_space]) / (update_tsdf_count[valid_space] + 1)
+        update_1 = np.abs(update_tsdf)
+        update_2 = np.abs(tsdf)
+        min_update = np.array(update_tsdf)
+        min_update[update_2<update_1] = tsdf[update_2<update_1]
 
-        self.tsdf[valid_space] = (self.tsdf[valid_space] * self.tsdf_count[valid_space] + tsdf[valid_space]) / (self.tsdf_count[valid_space] + 1)
+        min_filter = ((self.tsdf_count>0) & (self.tsdf_count % 10 == 0))  # every several passes, use min to update TSDF
+        # min_filter = np.zeros(valid_space.shape).astype(bool)
+        update_tsdf[valid_space&min_filter] = min_update[valid_space&min_filter]
+
+        update_tsdf[valid_space&(~min_filter)] = (update_tsdf[valid_space&(~min_filter)] * update_tsdf_count[valid_space&(~min_filter)] + \
+                                    tsdf[valid_space&(~min_filter)]) / (update_tsdf_count[valid_space&(~min_filter)] + 1)
+
+        # self.tsdf[valid_space] = (self.tsdf[valid_space] * self.tsdf_count[valid_space] + tsdf[valid_space]) / (self.tsdf_count[valid_space] + 1)
         if self.use_color:
             self.color_tsdf[valid_space] = (self.color_tsdf[valid_space] * self.tsdf_count[valid_space].reshape((-1,1)) + voxel_color[valid_space]) / (self.tsdf_count[valid_space].reshape((-1,1)) + 1)
             self.color_tsdf[self.color_tsdf > 255] = 255.0
             self.color_tsdf[self.color_tsdf < 0] = 0
-        self.tsdf_count[valid_space] = self.tsdf_count[valid_space] + 1
+        update_tsdf_count[valid_space] = update_tsdf_count[valid_space] + 1
+
+        # self.tsdf_count[valid_space] = self.tsdf_count[valid_space] + 1
 
 
 
-        self.tsdf[self.tsdf>self.max_v*1.1] = self.max_v*1.1
-        self.tsdf[self.tsdf<self.min_v] = self.min_v
+        # self.tsdf[self.tsdf>self.max_v*1.1] = self.max_v*1.1
+        # self.tsdf[self.tsdf<self.min_v] = self.min_v
+        
+        # * truncate
+        update_tsdf[update_tsdf>self.max_v*1.1] = self.max_v*1.1
+        update_tsdf[update_tsdf<self.min_v] = self.min_v
+
+
         # self.tsdf[self.tsdf<self.min_v*1.1] = self.min_v*1.1
 
         # handle invalid space: don't update
         # invalid_space = ((voxel_depth <= 0) | (tsdf < self.min_v)) & valid_mask
 
-        self.tsdf[self.tsdf_count==0] = 0.0
+        update_tsdf[update_tsdf_count==0] = self.tsdf_default
+
+        self.tsdf = update_tsdf
+        self.tsdf_count = update_tsdf_count
+        # self.tsdf[self.tsdf_count==0] = 0.0
 
         del voxel_vecs
         del valid_space
         del tsdf
-
-    def update_tsdf_unhidden(self, depth_img, color_img, camera_extrinsics, camera_intrinsics):
-        """
-        given the *segmented* depth image belonging to the object, update tsdf
-        if new parts are seen, expand the model (this only happens when this object is inactive, or hidden initially)
-
-        in this version, we do not limit ourselves to the parts which have depth values
-        # NOTE: but the depth value needs to be max at places that are segmented out
-        """
-        # obtain pixel locations for each of the voxels
-        voxel_vecs = np.array([self.voxel_x, self.voxel_y, self.voxel_z]).transpose((1,2,3,0)) + 0.5
-        # voxel_vecs = np.concatenate([self.voxel_x, self.voxel_y, self.voxel_z], axis=3)
-        voxel_vecs = voxel_vecs.reshape(-1,3) * self.resol
-        transformed_voxels = self.transform[:3,:3].dot(voxel_vecs.T).T + self.transform[:3,3]
-        # get to the image space
-        cam_transform = np.linalg.inv(camera_extrinsics)
-        transformed_voxels = cam_transform[:3,:3].dot(transformed_voxels.T).T + cam_transform[:3,3]
-
-        # cam_to_voxel_dist = np.linalg.norm(transformed_voxels, axis=1)
-        cam_to_voxel_depth = np.array(transformed_voxels[:,2])
-        # intrinsics
-        cam_intrinsics = camera_intrinsics
-        fx = cam_intrinsics[0][0]
-        fy = cam_intrinsics[1][1]
-        cx = cam_intrinsics[0][2]
-        cy = cam_intrinsics[1][2]
-        transformed_voxels[:,0] = transformed_voxels[:,0] / transformed_voxels[:,2] * fx + cx
-        transformed_voxels[:,1] = transformed_voxels[:,1] / transformed_voxels[:,2] * fy + cy
-        transformed_voxels = np.floor(transformed_voxels).astype(int)
-        voxel_depth = np.zeros((len(transformed_voxels)))
-        valid_mask = (transformed_voxels[:,0] >= 0) & (transformed_voxels[:,0] < len(depth_img[0])) & \
-                        (transformed_voxels[:,1] >= 0) & (transformed_voxels[:,1] < len(depth_img))
-        voxel_depth[valid_mask] = depth_img[transformed_voxels[valid_mask][:,1], transformed_voxels[valid_mask][:,0]]
-        valid_mask = valid_mask.reshape(self.voxel_x.shape)
-        voxel_depth = voxel_depth.reshape(self.voxel_x.shape)
-
-        cam_to_voxel_depth = cam_to_voxel_depth.reshape(self.voxel_x.shape)
-
-
-        # handle valid space
-        tsdf = np.zeros(self.tsdf.shape)
-        tsdf = (voxel_depth - cam_to_voxel_depth)# * self.scale
-
-        # invalid parts: depth==0.
-        # valid and unhidden by others: depth=MAX_DEPTH
-        valid_space = (voxel_depth>0) & (tsdf > self.min_v) & valid_mask
-
-        self.tsdf[valid_space] = (self.tsdf[valid_space] * self.tsdf_count[valid_space] + tsdf[valid_space]) / (self.tsdf_count[valid_space] + 1)
-        self.tsdf_count[valid_space] = self.tsdf_count[valid_space] + 1
-
-        self.tsdf[self.tsdf>self.max_v*1.1] = self.max_v*1.1
-        self.tsdf[self.tsdf<self.min_v] = self.min_v
-
-        # handle invalid space: don't update
-        # invalid_space = (tsdf < self.min_v) & valid_mask
-
-        self.tsdf[self.tsdf_count==0] = 0.0
-
-        del tsdf
-        del valid_space
+        del update_tsdf
+        del update_tsdf_count
 
     def sample_pcd(self, mask, n_sample=10):
         # sample voxels in te mask
@@ -505,7 +485,6 @@ class ObjectBelief():
         filtered_g = filtered_g / np.linalg.norm(filtered_g,axis=1).reshape(-1,1)
 
         return filtered_pts * self.resol, -filtered_g
-
 
     def obtain_boundary(self, depth_img, seg_img, workspace_ids):
         # obtain the boundary boolean mask (adjacent to parts that do not belong to this object)
@@ -693,23 +672,103 @@ class ObjectBelief():
                 print('enough has been seen for object ', self.pybullet_id, ' and it is now active')
                 self.set_active()
 
+
+    def check_complete(self):
+        # check whether the reconstruction is complete
+        # condition: for any unseen points, their neighrbors are unseen points or interior of object
+        if not self.active:
+            # print('checking complete... NOT ACTIVE')
+            return False
+
+        unseen_threshold = 2
+        unseen_mask = (self.tsdf_count <= unseen_threshold)
+        voxel_x = self.voxel_x[unseen_mask].astype(int)
+        voxel_y = self.voxel_y[unseen_mask].astype(int)
+        voxel_z = self.voxel_z[unseen_mask].astype(int)
+        for i in range(3*3*3):
+
+            valid_mask = np.ones(voxel_x.shape).astype(bool)
+            n = i
+            xi = n % 3
+            n = n // 3
+            yi = n % 3
+            n = n // 3
+            zi = n % 3
+            # compute valid mask
+            if xi == 1:
+                valid_mask = valid_mask & (voxel_x>0)
+            elif xi == 2:
+                valid_mask = valid_mask & (voxel_x<voxel_x.max())
+            if yi == 1:
+                valid_mask = valid_mask & (voxel_y>0)
+            elif yi == 2:
+                valid_mask = valid_mask & (voxel_y<voxel_y.max())
+            if zi == 1:
+                valid_mask = valid_mask & (voxel_z>0)
+            elif zi == 2:
+                valid_mask = valid_mask & (voxel_z<voxel_z.max())
+            
+            if xi == 1:
+                x = voxel_x[valid_mask]-1
+            elif xi == 2:
+                x = voxel_x[valid_mask]+1
+            else:
+                x = voxel_x[valid_mask]
+            if yi == 1:
+                y = voxel_y[valid_mask]-1
+            elif yi == 2:
+                y = voxel_y[valid_mask]+1
+            else:
+                y = voxel_y[valid_mask]
+            if zi == 1:
+                z = voxel_z[valid_mask]-1
+            elif zi == 2:
+                z = voxel_z[valid_mask]+1
+            else:
+                z = voxel_z[valid_mask]
+
+            # mask = (self.tsdf_count[np.ix_(x,y,z)] == 0) | \
+            #         ((self.tsdf_count[np.ix_(x,y,z)] > 0) & (self.tsdf[np.ix_(x,y,z)] < 0))
+            padding = (np.array(self.resol)**2).sum()
+            padding = np.sqrt(padding)
+            mask = (self.tsdf_count[x,y,z] <= unseen_threshold) | \
+                    ((self.tsdf_count[x,y,z] > 0) & (self.tsdf[x,y,z] < self.max_v+padding))
+
+            if (~mask).sum() > 0:
+                print('checking complete...')
+                print('x,y,z = (%d,%d,%d)' %(xi,yi,zi))
+                print('failed places: ')
+                print('tsdf_count: ')
+                print(self.tsdf_count[x,y,z][~mask])
+                print('tsdf: ')
+                print(self.tsdf[x,y,z][~mask])
+                print('upper bound: ')
+                print(self.max_v+padding)
+                return False
+        print('object has been completely reconstructed')
+        return True
+
+
+
+
 def test():
     # test the module
-    object = ObjectBelief(0.0, 0.0, 0.0, 1.000, 1.000, 1.000, [0.01,0.01,0.01], 0.05)
-
-    object.tsdf = object.tsdf + 1.0
+    object = ObjectBelief(0,0, 0.0, 0.0, 0.0, 1.000, 1.000, 1.000, [0.1,0.1,1.0], 0.05)
+    object.set_active()
+    # object.tsdf = object.tsdf + 1.0
     
-    object.expand_model(-0.005, -0.005, -0.005, 1.01,1.01,1.01)
+    # object.expand_model(-0.005, -0.005, -0.005, 1.01,1.01,1.01)
 
-    print('new mins: ')
-    print(object.xmin, object.ymin, object.zmin)
-    print('new maxs: ')
-    print(object.xmax, object.ymax, object.zmax)
+    # print('new mins: ')
+    # print(object.xmin, object.ymin, object.zmin)
+    # print('new maxs: ')
+    # print(object.xmax, object.ymax, object.zmax)
 
-    print(object.tsdf[1:,1:,1].sum())
-    object.tsdf_count += 1
+    # print(object.tsdf[1:,1:,1].sum())
+    # object.tsdf_count += 1
 
-    object.get_surface_normal()
+    # object.get_surface_normal()
+    print(object.check_complete())
 
 if __name__ == "__main__":
     test()

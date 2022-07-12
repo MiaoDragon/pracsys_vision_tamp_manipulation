@@ -69,7 +69,9 @@ class PerceptionSystem():
             seg_depth_img = np.array(depth_img)
             # seg_depth_img[seg_img!=seg_id] = 0  # including other objects and robot
             # # handle background, workspace
-            seg_depth_img[seg_depth_img==0] = camera_far  # TODO: might use the actual depth?
+
+            # seg_depth_img[seg_depth_img==0] = camera_far  # TODO: might use the actual depth?
+
             for cid in workspace_ids:
                 seg_depth_img[seg_img==cid] = camera_far  # workspace
             seg_depth_img[seg_img==-1] = camera_far  # background
@@ -88,6 +90,7 @@ class PerceptionSystem():
             # this will cause the object to be seen-through
             # Added condition check to see whether the object is hidden by others
             obj_hide_set = obj_hide_sets[obj_id]
+
             for i in range(len(obj_hide_set)):
                 seg_depth_img[seg_img==obj_hide_set[i]] = 0
 
@@ -183,6 +186,9 @@ class PerceptionSystem():
                                 self.objects[obj_id].get_optimistic_model(), [0,0,1])
                 o3d.visualization.draw_geometries([vvoxel])
             else:
+                # cv2.imwrite('seg_depth_img_obj_%d.png' % (obj_id), seg_depth_img/seg_depth_img.max()*255)
+                # cv2.imwrite('seg_color_img_obj_%d.png' % (obj_id), seg_color_img)
+
                 self.objects[obj_id].update_tsdf(seg_depth_img, seg_color_img, camera_extrinsics, camera_intrinsics)
 
 
@@ -201,7 +207,9 @@ class PerceptionSystem():
             obj_pcds[obj_id] = pcd
             obj_opt_pcds[obj_id] = opt_pcd
         # label the occlusion
-        occlusion_label, occupied_label, occluded_dict, occupied_dict = self.occlusion.label_scene_occlusion(occluded, camera_extrinsics, camera_intrinsics, obj_poses, obj_pcds, obj_opt_pcds)
+        occlusion_label, occupied_label, occluded_dict, occupied_dict = \
+            self.occlusion.label_scene_occlusion(occluded, camera_extrinsics, camera_intrinsics, depth_img.shape,
+                                                obj_poses, obj_pcds, obj_opt_pcds)
 
         if len(self.sensed_imgs) == 0:
             self.sensed_imgs.append(depth_img)
@@ -252,9 +260,6 @@ class PerceptionSystem():
         if len(sensed_obj_ids) > 0:
             del seg_depth_img
         
-
-
-
     def filtering(self, camera_extrinsics, camera_intrinsics):
         """
         since we remove each object and sense at each time, recording the list of past sensed depth images
@@ -280,7 +285,9 @@ class PerceptionSystem():
     
             for obj_id, obj_pose in self.sensed_poses[i].items():
                 obj_poses[obj_id] = obj_pose
-            occlusion_label, occupied_label, occluded_dict, _ = self.occlusion.label_scene_occlusion(occluded, camera_extrinsics, camera_intrinsics, obj_poses, obj_conserv_pcds, obj_opt_pcds)
+            occlusion_label, occupied_label, occluded_dict, _ = \
+                    self.occlusion.label_scene_occlusion(occluded, camera_extrinsics, camera_intrinsics, depth_img.shape,
+                                                        obj_poses, obj_conserv_pcds, obj_opt_pcds)
         
 
             opt_occupied_dict = self.occlusion.obtain_object_occupancy(camera_extrinsics, camera_intrinsics, obj_poses, obj_opt_pcds)
@@ -348,9 +355,6 @@ class PerceptionSystem():
         seg_color_img[seg_img!=obj_id,:] = 0
 
         self.objects[obj_id].update_tsdf(seg_depth_img, seg_color_img, camera_extrinsics, camera_intrinsics)
-
-
-
 
     def pipeline_sim(self, color_img, depth_img, seg_img, camera, robot_ids, workspace_ids):
         """

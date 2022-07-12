@@ -244,7 +244,8 @@ class SceneBelief():
         return occluded
 
 
-    def label_scene_occlusion(self, occluded, camera_extrinsics, camera_intrinsics, obj_poses, obj_pcds, obj_opt_pcds, depth_nn=1):
+    def label_scene_occlusion(self, occluded, camera_extrinsics, camera_intrinsics, img_shape, 
+                            obj_poses, obj_pcds, obj_opt_pcds, depth_nn=1):
         """
         depth_nn: maximum distance in the depth image to count for the object
         """
@@ -345,6 +346,12 @@ class SceneBelief():
             if max_i <= 0 or max_j <= 0:
                 # not in the camera view
                 continue
+            max_i = min(max_i, img_shape[0])
+            max_j = min(max_j, img_shape[1])  
+            # crop pcds outside of camera view, as it doesn't contribute to the scene occlusion
+            crop_mask = (transformed_pcd[:,1] < max_i) & (transformed_pcd[:,0] < max_j)
+            transformed_pcd = transformed_pcd[crop_mask]
+            depth = depth[crop_mask]
 
             unique_indices = np.unique(transformed_pcd, axis=0)
             unique_valid = (unique_indices[:,0] >= 0) & (unique_indices[:,1] >= 0)

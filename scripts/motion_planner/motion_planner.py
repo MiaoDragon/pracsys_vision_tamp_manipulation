@@ -246,6 +246,8 @@ class MotionPlanner():
         quat = tf.quaternion_from_matrix(suction_pose)  # w x y z
         prev_suction_joint = suction_joint
         joint_vals.append(prev_suction_joint)
+        drange = 15*np.pi/180  # max range between points
+        padding = 0*np.pi/180
         for i in range(1,n_step):
             if i == 0:
                 collision_check = False
@@ -253,16 +255,24 @@ class MotionPlanner():
                 collision_check = True
             suction_pos_step = suction_pos + retreat_vec * i * step
             # get joints (through ik) for current step
+
+            ul = np.minimum(robot.sample_upper_lim-padding, prev_suction_joint+drange*np.ones(len(prev_suction_joint)))
+            ll = np.maximum(robot.sample_lower_lim+padding, prev_suction_joint-drange*np.ones(len(prev_suction_joint)))
+            jr = np.array(robot.jr)
+            jr[:len(ul)] = ul - ll
             valid, suction_joint_step = robot.get_ik(robot.tip_link_name, suction_pos_step, 
                                                     [quat[1],quat[2],quat[3],quat[0]], prev_suction_joint,
+                                                    lower_lim=ll, upper_lim=ul, jr=jr,
                                                     collision_check=collision_check, workspace=workspace)
+            if display:
+                input('step %d/%d..., valid: %d' % (i, n_step, valid))
+                joint_dict = self.format_joint_name_val_dict(robot.joint_names, [suction_joint_step])[0]
+                rs = self.get_robot_state_from_joint_dict(joint_dict)
+                self.display_robot_state(rs)
+
             if valid:
                 prev_suction_joint = suction_joint_step
                 joint_vals.append(prev_suction_joint)
-                if display:
-                    robot.set_joints_without_memorize(suction_joint_step)
-                    input('next straight-line in suction_plan...')
-                    robot.set_joints_without_memorize(robot.joint_vals)
 
         joint_vals = joint_vals[::-1]  # reverse: from pre_suction_pos to suction_pos
         suction_joint_dict_list = self.format_joint_name_val_dict(robot.joint_names, joint_vals)
@@ -345,12 +355,14 @@ class MotionPlanner():
         vals = []
         for i in range(len(names)):
             vals.append(start_joint_dict[names[i]])
+
         joint_state.name = names
         joint_state.position = vals
         moveit_robot_state = RobotState()
         moveit_robot_state.joint_state = joint_state
         moveit_robot_state.attached_collision_objects = attached_acos
         moveit_robot_state.is_diff = True
+
         # make sure the goal is only the ones in the group
         new_goal_joint_dict = {}
         for name, val in goal_joint_dict.items():
@@ -358,7 +370,17 @@ class MotionPlanner():
                 continue
             new_goal_joint_dict[name] = val
         goal_joint_dict = new_goal_joint_dict
-        
+
+        # new_goal_joint_dict = {}
+        # for i in range(len(robot.joint_names)):
+        #     if robot.joint_names[i] in goal_joint_dict:
+        #         new_goal_joint_dict[robot.joint_names[i]] = goal_joint_dict[robot.joint_names[i]]
+        #     else:
+        #         new_goal_joint_dict[robot.joint_names[i]] = robot.joint_vals[i]
+        # goal_joint_dict = new_goal_joint_dict
+
+
+
         # self.move_group.set_planner_id('PersistentLazyPRM')
 
         self.move_group.set_planner_id('BiTRRT')
@@ -403,6 +425,8 @@ class MotionPlanner():
 
         joint_vals = [prev_joint]
 
+        drange = 15*np.pi/180  # max range between points
+        padding = 0*np.pi/180
         for i in range(1,n_step):
             tip_pos_step = tip_pos + move_vec * i * step
             # get joints (through ik) for current step
@@ -410,9 +434,16 @@ class MotionPlanner():
                 ik_collision_check = False
             else:
                 ik_collision_check = collision_check
+            # lower limit, upper limit: using previous joint angles
+            ul = np.minimum(robot.sample_upper_lim-padding, prev_joint+drange*np.ones(len(prev_joint)))
+            ll = np.maximum(robot.sample_lower_lim+padding, prev_joint-drange*np.ones(len(prev_joint)))
+            jr = np.array(robot.jr)
+            jr[:len(ul)] = ul - ll
             valid, joint_step = robot.get_ik(robot.tip_link_name, tip_pos_step, 
                                                     [quat[1],quat[2],quat[3],quat[0]], prev_joint,
-                                                    ik_collision_check, workspace)
+                                                    lower_lim=ll, upper_lim=ul, jr=jr,
+                                                    collision_check=ik_collision_check, 
+                                                    workspace=workspace)
             if display:
                 input('step %d/%d..., valid: %d' % (i, n_step, valid))
                 joint_dict = self.format_joint_name_val_dict(robot.joint_names, [joint_step])[0]
@@ -424,7 +455,7 @@ class MotionPlanner():
                 prev_joint = joint_step
                 joint_vals.append(prev_joint)
 
-
+        print('straight-line n_steps: ', len(joint_vals))
         joint_dict_list = self.format_joint_name_val_dict(robot.joint_names, joint_vals)   
 
         if display:

@@ -1,25 +1,53 @@
 """
 interface from planning system to execution system
 """
+import cv2
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from pracsys_vision_tamp_manipulation.srv import ExecuteTrajectory, AttachObject
+from pracsys_vision_tamp_manipulation.msg import RobotState
+
+import message_filters
 
 import time
 import rospy
 import numpy as np
+from threading import Thread, Lock
+import transformations as tf
 
+from utils.visual_utils import *
 class ExecutionInterface():
+    """
+    this handles in/out interface to communicate with the execution scene
+    """
     def __init__(self, scene, perception):
         self.bridge = CvBridge()
         self.attached_obj = None
+        self.attached_pose = None
         self.ros_time = 0
         self.execution_calls = 0
         self.num_executed_actions = 0
         self.num_collision = 0
         self.scene = scene
         self.perception = perception
+
+        # for updating information
+        self.current_robot_state = self.scene.robot.joint_dict      
+        color_sub = message_filters.Subscriber('rgb_image', Image)
+        depth_sub = message_filters.Subscriber('depth_image', Image)
+        seg_sub = message_filters.Subscriber('seg_image', Image)
+        state_sub = message_filters.Subscriber('robot_state_publisher', RobotState)
+        ts =message_filters.ApproximateTimeSynchronizer([color_sub, depth_sub, seg_sub, state_sub],5,0.01)
+        # ts =message_filters.TimeSynchronizer([color_sub, depth_sub, seg_sub, state_sub],5)
+
+        ts.registerCallback(self.info_cb)
+        # self.timer = rospy.Timer(rospy.Duration(0.01), self.timer_cb)
+
+        # add a lock
+        # self.lock = Lock()
+
+        
 
     def execute_traj(self, joint_dict_list, ignored_obj_id=-1, duration=0.001):
         """
@@ -56,14 +84,20 @@ class ExecutionInterface():
             self.num_collision += resp1.num_collision
             # print('number of collision: ', self.num_collision)
             # update object pose using the last joint angle if an object is attached
-            if self.attached_obj is not None:
-                start_pose = self.scene.robot.get_tip_link_pose(joint_dict_list[0])
-                end_pose = self.scene.robot.get_tip_link_pose(joint_dict_list[-1])
-                rel_transform = end_pose.dot(np.linalg.inv(start_pose))
-                self.perception.objects[self.attached_obj].update_transform_from_relative(rel_transform)
-            # update the planning scene
-            for i in range(len(joint_dict_list)):
-                self.scene.robot.set_joint_from_dict(joint_dict_list[i])
+
+            # * since we are using real-time perception, the robot state is updated
+            # continuously in a separate thread.
+
+            rospy.sleep(1)  # wait for update of the robot state monitor
+
+            self.scene.robot.set_joint_from_dict_data(self.current_robot_state)
+
+            # self.scene.robot.set_joint_from_dict_data(joint_dict_list[-1])
+            # if self.attached_obj is not None:
+            #     # TODO: maybe we should use stand-alone FK solver instead of PyBullet
+            #     obj_transform = self.scene.robot.get_tip_link_pose_urdfpy(joint_dict_list[-1]).dot(self.scene.robot.attached_obj_rel_pose)
+            #     self.perception.objects[self.attached_obj].update_transform(obj_transform)
+        
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
 
@@ -78,9 +112,15 @@ class ExecutionInterface():
         try:
             attach_object = rospy.ServiceProxy('attach_object', AttachObject)
             resp1 = attach_object(True, self.perception.data_assoc.obj_ids_reverse[obj_id])
-            self.attached_obj = obj_id
+            # ee_pose = self.scene.robot.get_tip_link_pose()
+            # obtain object pose in ee link
+            # rel_pose = np.linalg.inv(ee_pose).dot(self.perception.objects[obj_id].transform)
+            # self.scene.robot.attach(obj_id, rel_pose)
+            # self.attached_obj = obj_id
+
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
+        rospy.sleep(1)  # wait for update of the robot state monitor
         self.ros_time += time.time() - start_time
         self.execution_calls += 1
     def detach_obj(self):
@@ -97,33 +137,195 @@ class ExecutionInterface():
         try:
             attach_object = rospy.ServiceProxy('attach_object', AttachObject)
             resp1 = attach_object(False, -1)
-            self.attached_obj = None
-            self.num_executed_actions += 1
+            # self.attached_obj = None
+            # self.num_executed_actions += 1
+            # self.scene.robot.detach()
 
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
+        rospy.sleep(1)  # wait for update of the robot state monitor
         self.ros_time += time.time() - start_time
         self.execution_calls += 1
+
     def get_image(self):
-        print('waiting for message...')
-        start_time = time.time()
+        # print('waiting for message...')
+        # start_time = time.time()
         # rospy.sleep(0.2)
 
-        color_img = rospy.wait_for_message('rgb_image', Image, timeout=10)
-        depth_img = rospy.wait_for_message('depth_image', Image, timeout=10)
-        seg_img = rospy.wait_for_message('seg_image', Image, timeout=10)
+        # color_img = rospy.wait_for_message('rgb_image', Image, timeout=10)
+        # depth_img = rospy.wait_for_message('depth_image', Image, timeout=10)
+        # seg_img = rospy.wait_for_message('seg_image', Image, timeout=10)
 
 
-        color_img = self.bridge.imgmsg_to_cv2(color_img, 'passthrough')
-        depth_img = self.bridge.imgmsg_to_cv2(depth_img, 'passthrough')
-        seg_img = self.bridge.imgmsg_to_cv2(seg_img, 'passthrough')
+        # color_img = self.bridge.imgmsg_to_cv2(color_img, 'passthrough')
+        # depth_img = self.bridge.imgmsg_to_cv2(depth_img, 'passthrough')
+        # seg_img = self.bridge.imgmsg_to_cv2(seg_img, 'passthrough')
 
-        self.ros_time += time.time() - start_time
-        self.execution_calls += 1
-
+        # self.ros_time += time.time() - start_time
+        # self.execution_calls += 1
+        # return color_img, depth_img, seg_img
         # visualize the images
         # cv2.imshow('img', color_img)
         # print('Press space...')
         # cv2.waitKey()
+        # return self.color_img, self.depth_img, self.seg_img
+        pass
+    def joint_dict_from_joint_state(self, msg: JointState):
+        # extract the joint dict from joint state ROS message
+        names = msg.name
+        position = msg.position
+        return dict(zip(names, position))
 
-        return color_img, depth_img, seg_img
+    def get_robot_state(self, msg: RobotState):
+        """
+        continuously update robot state obtained from execution_scene
+        """
+        self.current_robot_state = self.joint_dict_from_joint_state(msg.joint_state)
+        if msg.attached_obj == -1:
+            attached_obj = -1
+        else:
+            attached_obj = self.perception.data_assoc.obj_ids[msg.attached_obj]
+        # if attached, update object transform
+        if (self.attached_obj is None and attached_obj != -1) or \
+            (self.attached_obj is not None and attached_obj != -1 and self.attached_obj != attached_obj):
+            # new attached object
+            self.attached_obj = attached_obj
+            self.attached_pose = np.array(self.perception.objects[self.attached_obj].transform)
+            delta_transform = tf.quaternion_matrix([msg.delta_transform.rotation.w,
+                                                       msg.delta_transform.rotation.x,
+                                                       msg.delta_transform.rotation.y,
+                                                       msg.delta_transform.rotation.z])
+            delta_transform[0,3] = msg.delta_transform.translation.x
+            delta_transform[1,3] = msg.delta_transform.translation.y
+            delta_transform[2,3] = msg.delta_transform.translation.z
+            self.perception.objects[self.attached_obj].update_transform(delta_transform.dot(self.attached_pose))
+        elif (self.attached_obj == attached_obj):
+            # previous attached object    
+            delta_transform = tf.quaternion_matrix([msg.delta_transform.rotation.w,
+                                                       msg.delta_transform.rotation.x,
+                                                       msg.delta_transform.rotation.y,
+                                                       msg.delta_transform.rotation.z])
+            delta_transform[0,3] = msg.delta_transform.translation.x
+            delta_transform[1,3] = msg.delta_transform.translation.y
+            delta_transform[2,3] = msg.delta_transform.translation.z
+            self.perception.objects[self.attached_obj].update_transform(delta_transform.dot(self.attached_pose))
+        else:
+            # no attached object
+            self.attached_obj = None
+            self.attached_pose = None
+
+    def timer_cb(self, timer):
+        color_msg = rospy.wait_for_message('rgb_image', Image, timeout=10)
+        depth_msg = rospy.wait_for_message('depth_image', Image, timeout=10)
+        seg_msg = rospy.wait_for_message('seg_image', Image, timeout=10)
+        state_msg = rospy.wait_for_message('robot_state_publisher', RobotState, timeout=10)
+
+        self.color_img = self.bridge.imgmsg_to_cv2(color_msg, 'passthrough')
+        self.depth_img = self.bridge.imgmsg_to_cv2(depth_msg, 'passthrough')
+        self.seg_img = self.bridge.imgmsg_to_cv2(seg_msg, 'passthrough')
+        self.get_robot_state(state_msg)
+        attached_obj = self.attached_obj
+        ct = time.strftime("%Y%m%d-%H%M%S")
+        cv2.imwrite(ct+"_img.png", self.color_img)
+        if attached_obj is not None:
+            np.save(ct+"_obj_transform.npy", self.perception.objects[self.attached_obj].transform)
+
+        # perform perception
+        self.perception.pipeline_sim(self.color_img, self.depth_img, self.seg_img, self.scene.camera, 
+                            [self.scene.robot.robot_id], self.scene.workspace.component_ids)
+        if attached_obj is not None:
+            obj = self.perception.objects[self.attached_obj]
+            pcd = obj.sample_conservative_pcd() / obj.resol
+            pcd_ind = np.floor(pcd).astype(int)
+            # Get vertex colors
+            rgb_vals = np.zeros(pcd_ind.shape)
+            # rgb_vals = obj.color_tsdf[pcd_ind[:, 0], pcd_ind[:, 1], pcd_ind[:, 2]] / 255        
+
+            pcd = visualize_pcd(pcd, rgb_vals)
+            bbox = visualize_bbox(obj.voxel_x, obj.voxel_y, obj.voxel_z)
+            # voxel = visualize_voxel(obj.voxel_x, obj.voxel_y, obj.voxel_z, model, [1,0,0])
+
+            center = [obj.voxel_y.shape[0]/2, obj.voxel_y.shape[1]/2, obj.voxel_y.shape[2]/2]  # look_at target
+            eye = [-obj.voxel_y.shape[0]*1, obj.voxel_y.shape[1]/2, obj.voxel_y.shape[2]*2]  # camera position
+            up = [0, 0, 1]  # camera orientation
+
+            render = setup_render(center, eye, up)
+            # Show the original coordinate axes for comparison.
+            # X is red, Y is green and Z is blue.
+            render.scene.show_axes(True)
+            # Define a simple unlit Material.
+            # (The base color does not replace the arrows' own colors.)
+            # mtl = create_material([1.0, 1.0, 1.0, 0.01], 'defaultUnlit')
+            mtl2 = create_material([1.0, 1.0, 1.0, 1], 'defaultUnlit')
+            # render.scene.add_geometry("voxel", voxel, mtl)
+            render.scene.add_geometry("pcd", pcd, mtl2)
+            render.scene.add_geometry("bbox", bbox, mtl2)
+            # Read the image into a variable
+            img_o3d = render.render_to_image()
+            img_o3d = cv2.cvtColor(np.array(img_o3d), cv2.COLOR_RGBA2BGRA)
+            cv2.imwrite(ct+"_recon.png", img_o3d)
+
+
+        # if object is attached, then sense the object
+        # if attached_obj is not None:
+        #     self.perception.sense_object(attached_obj, self.color_img, self.depth_img, self.seg_img, 
+        #                                 self.scene.camera, [self.scene.robot.robot_id], self.scene.workspace.component_ids)
+
+        
+
+    def info_cb(self, rgb_msg, depth_msg, seg_msg, state_msg):
+
+        self.color_img = self.bridge.imgmsg_to_cv2(rgb_msg, 'passthrough')
+        self.depth_img = self.bridge.imgmsg_to_cv2(depth_msg, 'passthrough')
+        self.seg_img = self.bridge.imgmsg_to_cv2(seg_msg, 'passthrough')
+        self.get_robot_state(state_msg)
+        attached_obj = self.attached_obj
+        # ct = time.strftime("%Y%m%d-%H%M%S")
+        # cv2.imwrite(ct+"_img.png", self.color_img)
+        # if attached_obj is not None:
+        #     np.save(ct+"_obj_transform.npy", self.perception.objects[self.attached_obj].transform)
+
+        # perform perception
+        self.perception.pipeline_sim(self.color_img, self.depth_img, self.seg_img, self.scene.camera, 
+                            [self.scene.robot.robot_id], self.scene.workspace.component_ids)
+        # if attached_obj is not None:
+        #     obj = self.perception.objects[self.attached_obj]
+        #     pcd = obj.sample_conservative_pcd() / obj.resol
+        #     pcd_ind = np.floor(pcd).astype(int)
+        #     # Get vertex colors
+        #     rgb_vals = np.zeros(pcd_ind.shape)
+        #     # rgb_vals = obj.color_tsdf[pcd_ind[:, 0], pcd_ind[:, 1], pcd_ind[:, 2]] / 255        
+
+        #     pcd = visualize_pcd(pcd, rgb_vals)
+        #     bbox = visualize_bbox(obj.voxel_x, obj.voxel_y, obj.voxel_z)
+        #     # voxel = visualize_voxel(obj.voxel_x, obj.voxel_y, obj.voxel_z, model, [1,0,0])
+
+        #     center = [obj.voxel_y.shape[0]/2, obj.voxel_y.shape[1]/2, obj.voxel_y.shape[2]/2]  # look_at target
+        #     eye = [-obj.voxel_y.shape[0]*1, obj.voxel_y.shape[1]/2, obj.voxel_y.shape[2]*2]  # camera position
+        #     up = [0, 0, 1]  # camera orientation
+
+        #     render = setup_render(center, eye, up)
+        #     # Show the original coordinate axes for comparison.
+        #     # X is red, Y is green and Z is blue.
+        #     render.scene.show_axes(True)
+        #     # Define a simple unlit Material.
+        #     # (The base color does not replace the arrows' own colors.)
+        #     # mtl = create_material([1.0, 1.0, 1.0, 0.01], 'defaultUnlit')
+        #     mtl2 = create_material([1.0, 1.0, 1.0, 1], 'defaultUnlit')
+        #     # render.scene.add_geometry("voxel", voxel, mtl)
+        #     render.scene.add_geometry("pcd", pcd, mtl2)
+        #     render.scene.add_geometry("bbox", bbox, mtl2)
+        #     # Read the image into a variable
+        #     img_o3d = render.render_to_image()
+        #     img_o3d = cv2.cvtColor(np.array(img_o3d), cv2.COLOR_RGBA2BGRA)
+        #     cv2.imwrite(ct+"_recon.png", img_o3d)
+
+
+
+
+        # if object is attached, then sense the object
+        # if attached_obj is not None:
+        #     self.perception.sense_object(attached_obj, self.color_img, self.depth_img, self.seg_img, 
+        #                                 self.scene.camera, [self.scene.robot.robot_id], self.scene.workspace.component_ids)
+
+        

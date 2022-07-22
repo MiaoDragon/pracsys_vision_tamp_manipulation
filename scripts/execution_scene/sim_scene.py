@@ -3,8 +3,6 @@ simumlated execution scene. Some of it overlaps with the sim_scene defined in sc
 """
 import sys
 
-sys.path.insert(0,'/home/yinglong/Documents/research/task_motion_planning/infrastructure/motoman_ws/src/pracsys_vision_tamp_manipulation/scripts')
-
 import problem_generation as prob_gen
 from utils.visual_utils import *
 from pracsys_vision_tamp_manipulation.srv import AttachObject, ExecuteTrajectory, \

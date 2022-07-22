@@ -406,7 +406,9 @@ def random_one_problem_level(scene, level, num_objs, num_hiding_objs=1, safety_p
 
     rp = rospkg.RosPack()
     package_path = rp.get_path('vbcpm_execution_system')
+    print(package_path)
     urdf_path = os.path.join(package_path,scene_dict['robot']['urdf'])
+    print(urdf_path)
     joints = [0.] * 16
 
     ll = [-1.58, \

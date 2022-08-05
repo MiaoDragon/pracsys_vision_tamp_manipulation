@@ -32,6 +32,9 @@ class GroundTruthDataAssociation():
                 continue
             if seg_ids[i] in workspace_ids:
                 continue
+
+            #TODO: if number of pixels is too small pretend it failed segmentation
+
             # print('seg id: ', seg_ids[i])
             if seg_ids[i] in self.obj_ids.keys():
                 assoc[seg_ids[i]] = self.obj_ids[seg_ids[i]]

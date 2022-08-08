@@ -27,15 +27,16 @@ def geometric_suction_grasp_pose_generation(
     """
 
     # the following is just for autocompletion
-    from perception.object_belief import ObjectBelief
-    from scene.workspace import Workspace
-    from scene.robot import Robot
-    obj = ObjectBelief()
-    robot = Robot()
-    workspace = Workspace()
+    if False:
+        from perception.object_belief import ObjectBelief
+        from scene.workspace import Workspace
+        from scene.robot import Robot
+        obj = ObjectBelief()
+        robot = Robot()
+        workspace = Workspace()
     # comment out above during execution
 
-    object_id = obj.obj_id
+    object_id = obj.pybullet_id
     pybullet_id = robot.pybullet_id
 
     shape = p.getCollisionShapeData(object_id, -1, pybullet_id)[0]
@@ -44,12 +45,12 @@ def geometric_suction_grasp_pose_generation(
 
     # grasp orientations
     # vertical
-    vert = []
-    x = 0
-    y = np.pi
-    # rotate along gripper axis:
-    for z in np.linspace(-np.pi, np.pi, res):
-        vert.append(p.getQuaternionFromEuler((x, y, z)))
+    # vert = []
+    # x = 0
+    # y = np.pi
+    # # rotate along gripper axis:
+    # for z in np.linspace(-np.pi, np.pi, res):
+    #     vert.append(p.getQuaternionFromEuler((x, y, z)))
 
     # horizontal
     horz = []
@@ -63,6 +64,7 @@ def geometric_suction_grasp_pose_generation(
     # object position and orientation
     obj_pos, obj_rot = p.getBasePositionAndOrientation(object_id, pybullet_id)
     # obj_pos_in, obj_rot_in = p.invertTransform(obj_pos, obj_rot)
+    # gw = robot.right_flim[1] * 2  # gripper width
     gw = robot.right_flim[1] * 2  # gripper width
 
     def nearOdd(n):
@@ -77,26 +79,30 @@ def geometric_suction_grasp_pose_generation(
         # left = [0, -sy / 2, 0]
         # right = [0, sy / 2, 0]
         # front = [-sx / 2, 0, 0]
-        if sx < gw:
-            noz = nearOdd(sz / (gw * 1.5))
-            for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
-                grasps.append([[0, sy / 2, z * sz], horz[3]])  # right
-                grasps.append([[0, sy / 2, z * sz], horz[9]])  # right
-                grasps.append([[0, -sy / 2, z * sz], horz[5]])  # left
-                grasps.append([[0, -sy / 2, z * sz], horz[11]])  # left
-            noy = nearOdd(sy / gw)
-            for y in np.linspace(-(noy - 1) / (2 * noy), (noy - 1) / (2 * noy), noy):
-                grasps.append([[0, y * sy, sz / 2], vert[1]])  # top
-                grasps.append([[0, y * sy, sz / 2], vert[3]])  # top
-        if sy < gw:
-            noz = nearOdd(sz / gw)
-            for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
-                grasps.append([[-sx / 2, 0, z * sz], horz[4]])  # front
-                grasps.append([[-sx / 2, 0, z * sz], horz[10]])  # front
-            nox = nearOdd(sx / gw)
-            for x in np.linspace(-(nox - 1) / (2 * nox), (nox - 1) / (2 * nox), nox):
-                grasps.append([[x * sx, 0, sz / 2], vert[0]])  # top
-                grasps.append([[x * sx, 0, sz / 2], vert[2]])  # top
+        # if sx < gw:
+        #     noz = nearOdd(sz / (gw * 1.5))
+        #     for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
+        #         grasps.append([[0, sy / 2, z * sz], horz[3]])  # right
+        #         grasps.append([[0, sy / 2, z * sz], horz[9]])  # right
+        #         grasps.append([[0, -sy / 2, z * sz], horz[5]])  # left
+        #         grasps.append([[0, -sy / 2, z * sz], horz[11]])  # left
+        #     noy = nearOdd(sy / gw)
+        #     for y in np.linspace(-(noy - 1) / (2 * noy), (noy - 1) / (2 * noy), noy):
+        #         grasps.append([[0, y * sy, sz / 2], vert[1]])  # top
+        #         grasps.append([[0, y * sy, sz / 2], vert[3]])  # top
+        # if sy < gw:
+        #     noz = nearOdd(sz / gw)
+        #     for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
+        #         grasps.append([[-sx / 2, 0, z * sz], horz[4]])  # front
+        #         grasps.append([[-sx / 2, 0, z * sz], horz[10]])  # front
+        #     nox = nearOdd(sx / gw)
+        #     for x in np.linspace(-(nox - 1) / (2 * nox), (nox - 1) / (2 * nox), nox):
+        #         grasps.append([[x * sx, 0, sz / 2], vert[0]])  # top
+        #         grasps.append([[x * sx, 0, sz / 2], vert[2]])  # top
+        for z in np.linspace(-0.9, 0.9, res):
+            for y in np.linspace(-0.9, 0.9, res):
+                grasps.append([[-sx / 2, y * sy, z * sz], horz[4]])  # front
+                grasps.append([[-sx / 2, y * sy, z * sz], horz[10]])  # front
 
         offset1 = (offset1[0], offset1[1], offset1[2] + gw * 0.75)
     elif shape[2] == p.GEOM_CYLINDER or shape[2] == p.GEOM_CAPSULE:

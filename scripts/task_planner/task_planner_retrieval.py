@@ -105,8 +105,41 @@ class TaskPlanner():
         self.planner.pipeline_sim()
 
     def run_pipeline(self, ):
-        self.planner.pick()
-        self.planner.place()
+        # the following is just for autocompletion
+        if False:
+            from perception.object_belief import ObjectBelief
+            from scene.workspace import Workspace
+            from scene.robot import Robot
+            obj_doc = ObjectBelief()
+            robot_doc = Robot()
+            workspace_doc = Workspace()
+        # comment out above during execution
+
+        start_time = time.time()
+
+        self.pipeline_sim()
+        for obj_id, obj in self.perception.objects.items():
+            print(
+                p.getCollisionShapeData(
+                    obj.pybullet_id,
+                    -1,
+                    physicsClientId=self.execution.scene.robot.pybullet_id,
+                )
+            )
+
+        ### Grasp Sampling Test ###
+        pose_ind = input("Please Enter Object Id: ")
+        while pose_ind != 'q':
+            try:
+                obj_id = int(pose_ind[0])
+            except IndexError:
+                pose_ind = input("Please Enter Object Id: ")
+                continue
+
+            self.planner.grasp_test
+            pose_ind = input("Please Enter Object Id: ")
+        ### Grasp Sampling Test End ###
+        sys.exit(0)
 
 
 def main():

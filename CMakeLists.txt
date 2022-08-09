@@ -43,7 +43,7 @@ add_service_files(
 generate_messages(
   DEPENDENCIES
   std_msgs
-  # shape_msgs
+  shape_msgs
   sensor_msgs
   geometry_msgs
   trajectory_msgs

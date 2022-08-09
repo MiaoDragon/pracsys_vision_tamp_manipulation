@@ -4,6 +4,7 @@ interface from planning system to execution system
 import cv2
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, JointState
+from shape_msgs.msg import SolidPrimitive, Mesh, MeshTriangle
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from pracsys_vision_tamp_manipulation.msg import RobotState, PercievedObject
 from pracsys_vision_tamp_manipulation.srv import ExecuteTrajectory, AttachObject
@@ -13,6 +14,7 @@ import message_filters
 import time
 import rospy
 import numpy as np
+import pybullet as p
 import transformations as tf
 from threading import Thread, Lock
 
@@ -35,6 +37,11 @@ class ExecutionInterface():
         self.scene = scene
         self.perception = perception
         self.object_local_id_dict = {}
+        self.shape_type_dict = {
+            SolidPrimitive.BOX: p.GEOM_BOX,
+            SolidPrimitive.CYLINDER: p.GEOM_CYLINDER,
+            SolidPrimitive.SPHERE: p.GEOM_SPHERE,
+        }
 
         # for updating information
         self.current_robot_state = self.scene.robot.joint_dict
@@ -44,8 +51,8 @@ class ExecutionInterface():
         state_sub = message_filters.Subscriber('robot_state_publisher', RobotState)
         obj_sub = message_filters.Subscriber('object_state', PercievedObject)
         ts = message_filters.ApproximateTimeSynchronizer(
-            [color_sub, depth_sub, seg_sub, state_sub, obj_sub],
-            6,
+            [color_sub, depth_sub, seg_sub, state_sub],
+            5,
             0.01,
         )
         # ts =message_filters.TimeSynchronizer([color_sub, depth_sub, seg_sub, state_sub],5)
@@ -56,13 +63,13 @@ class ExecutionInterface():
         # add a lock
         # self.lock = Lock()
 
-        # ts2 = message_filters.ApproximateTimeSynchronizer(
-        #     [obj_sub],
-        #     1,
-        #     0.001,
-        #     allow_headerless=True,
-        # )
-        # ts2.registerCallback(callback)
+        ts2 = message_filters.ApproximateTimeSynchronizer(
+            [obj_sub],
+            1,
+            0.001,
+            allow_headerless=True,
+        )
+        ts2.registerCallback(self.update_object_state)
 
     def execute_traj(self, joint_dict_list, ignored_obj_id=-1, duration=0.001):
         """
@@ -249,6 +256,70 @@ class ExecutionInterface():
             self.attached_obj = None
             self.attached_pose = None
 
+    def update_object_state(self, msg: PercievedObject):
+        position = [
+            msg.pose.position.x,
+            msg.pose.position.y,
+            msg.pose.position.z,
+        ]
+        orientation = [
+            msg.pose.orientation.x,
+            msg.pose.orientation.y,
+            msg.pose.orientation.z,
+            msg.pose.orientation.w,
+        ]
+        if msg.name not in self.object_local_id_dict:
+            shape_type = self.shape_type_dict[msg.solid.type]
+            print(
+                shape_type,
+                msg.solid.dimensions,
+                position,
+                orientation,
+            )
+            oid = self.spawn_object(
+                shape_type,
+                msg.solid.dimensions,
+                position,
+                orientation,
+            )
+            self.object_local_id_dict[msg.name] = oid
+        else:
+            p.resetBasePositionAndOrientation(
+                self.object_local_id_dict[msg.name],
+                position,
+                orientation,
+                physicsClientId=self.scene.robot.pybullet_id,
+            )
+
+    def r_index(self, stype):
+        return {p.GEOM_CYLINDER: 1}.get(stype, 0)
+
+    def spawn_object(
+        self,
+        shape_type,
+        dimensions,
+        position=[0, 0, 2],
+        orientation=[0, 0, 0, 1],
+    ):
+        # don't worry about passing extra parameters not for
+        # a specific shape type, they are ignored
+        cuid = p.createCollisionShape(
+            shape_type,
+            halfExtents=np.multiply(0.5, dimensions),  # array of half dimensions if BOX
+            radius=dimensions[self.r_index(shape_type)],  # [0] if SPHERE, [1] if CYLINDER
+            height=dimensions[0],  # [0] if CYLINDER
+            physicsClientId=self.scene.robot.pybullet_id,
+        )
+        mass = 0  # static box
+        oid = p.createMultiBody(
+            mass,
+            cuid,
+            basePosition=position,
+            baseOrientation=orientation,
+            physicsClientId=self.scene.robot.pybullet_id,
+        )
+        return oid
+
     def timer_cb(self, timer):
         color_msg = rospy.wait_for_message('rgb_image', Image, timeout=10)
         depth_msg = rospy.wait_for_message('depth_image', Image, timeout=10)
@@ -322,12 +393,13 @@ class ExecutionInterface():
         #     self.perception.sense_object(attached_obj, self.color_img, self.depth_img, self.seg_img,
         #                                 self.scene.camera, [self.scene.robot.robot_id], self.scene.workspace.component_ids)
 
-    def info_cb(self, rgb_msg, depth_msg, seg_msg, state_msg):
+    def info_cb(self, rgb_msg, depth_msg, seg_msg, state_msg):  #, obj_msg):
 
         self.color_img = self.bridge.imgmsg_to_cv2(rgb_msg, 'passthrough')
         self.depth_img = self.bridge.imgmsg_to_cv2(depth_msg, 'passthrough')
         self.seg_img = self.bridge.imgmsg_to_cv2(seg_msg, 'passthrough')
         self.get_robot_state(state_msg)
+        # self.update_object_state(obj_msg)
         attached_obj = self.attached_obj
         # ct = time.strftime("%Y%m%d-%H%M%S")
         # cv2.imwrite(ct+"_img.png", self.color_img)
@@ -379,18 +451,3 @@ class ExecutionInterface():
         # if attached_obj is not None:
         #     self.perception.sense_object(attached_obj, self.color_img, self.depth_img, self.seg_img,
         #                                 self.scene.camera, [self.scene.robot.robot_id], self.scene.workspace.component_ids)
-
-        shape[2] = p.getCollisionShapeData(object_id, -1, self.pybullet_id)[0]
-
-        if msg.name not in self.object_local_id_dict:
-            pb_uid = None
-            if msg.solid.type == SolidPrimitive.BOX:
-                pass
-            elif msg.solid.type == SolidPrimitive.SPHERE:
-                pass
-            elif msg.solid.type == SolidPrimitive.CYLINDER:
-                pass
-            if pb_uid:
-                self.object_local_id_dict[msg.name] = uid
-        else:
-            pass

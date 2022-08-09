@@ -40,7 +40,8 @@ class ExecutionSystem():
             data = pickle.load(f)
             f.close()
             if obj_type == 'y':
-                scene_f, obj_poses, obj_pcds, obj_shapes, obj_sizes, target_pose, target_pcd, target_obj_shape, target_obj_size = data
+                scene_f, obj_poses, obj_pcds, obj_shapes, obj_sizes, \
+                        target_pose, target_pcd, target_obj_shape, target_obj_size = data
                 data = prob_gen.load_problem_level(
                     scene_f,
                     obj_poses,
@@ -52,16 +53,22 @@ class ExecutionSystem():
                     target_obj_shape,
                     target_obj_size,
                 )
-                pid, scene_f, robot, workspace, camera, obj_poses, obj_pcds, obj_ids, target_pose, target_pcd, target_obj_id = data
+                pid, scene_f, robot, workspace, camera, obj_poses, obj_pcds, obj_ids, \
+                        target_pose, target_pcd, target_obj_id = data
                 f = open(scene_f, 'r')
                 scene_dict = json.load(f)
                 print('loaded')
             else:
                 scene_f, obj_poses, obj_shapes, target_pose, target_obj_shape = data
                 data = prob_gen.load_problem_ycb(
-                    scene_f, obj_poses, obj_shapes, target_pose, target_obj_shape
+                    scene_f,
+                    obj_poses,
+                    obj_shapes,
+                    target_pose,
+                    target_obj_shape,
                 )
-                pid, scene_f, robot, workspace, camera, obj_poses, obj_ids, target_pose, target_obj_id = data
+                pid, scene_f, robot, workspace, camera, obj_poses, obj_ids, \
+                        target_pose, target_obj_id = data
                 f = open(scene_f, 'r')
                 scene_dict = json.load(f)
                 print('loaded')
@@ -83,9 +90,14 @@ class ExecutionSystem():
             if obj_type == 'y':
                 # data = prob_gen.random_one_problem_level(scene=scene_f, level=level, num_objs=num_objs, num_hiding_objs=1)
                 data = prob_gen.random_stacked_problem(
-                    scene=scene_f, level=level, num_objs=num_objs, num_hiding_objs=1
+                    scene=scene_f,
+                    level=level,
+                    num_objs=num_objs,
+                    num_hiding_objs=1,
                 )
-                pid, scene_f, robot, workspace, camera, obj_poses, obj_pcds, obj_ids, obj_shapes, obj_sizes, target_pose, target_pcd, target_obj_id, target_obj_shape, target_obj_size = data
+                pid, scene_f, robot, workspace, camera, obj_poses, obj_pcds, obj_ids, \
+                        obj_shapes, obj_sizes, target_pose, target_pcd, target_obj_id, \
+                        target_obj_shape, target_obj_size = data
                 data = (
                     scene_f,
                     obj_poses,
@@ -111,7 +123,8 @@ class ExecutionSystem():
                 data = prob_gen.random_one_problem_ycb(
                     scene=scene_f, level=level, num_objs=num_objs, num_hiding_objs=1
                 )
-                pid, scene_f, robot, workspace, camera, obj_poses, obj_ids, obj_shapes, target_pose, target_obj_id, target_obj_shape = data
+                pid, scene_f, robot, workspace, camera, obj_poses, obj_ids, obj_shapes, \
+                        target_pose, target_obj_id, target_obj_shape = data
                 data = (scene_f, obj_poses, obj_shapes, target_pose, target_obj_shape)
                 save = input('save current scene? 0 - no, 1 - yes...')
                 f = open(scene_f, 'r')
@@ -171,7 +184,8 @@ class ExecutionSystem():
         self.js_pub = rospy.Publisher('joint_states', JointState)
         self.obj_pub = rospy.Publisher('object_state', PercievedObject)
 
-        self.ignore_ids = {0,1,2,3,4,5} # ignore robot and table when publishing object states
+        # ignore robot and table when publishing object states
+        self.ignore_ids = {0, 1, 2, 3, 4, 5}
 
         self.timer = rospy.Timer(rospy.Duration(0.01), self.publish_joint_state)
 
@@ -207,7 +221,10 @@ class ExecutionSystem():
             distance = -0.02  # seems the PyBullet collision geometry is very conservative. The moveit planned path
             # sometimes collide with the environment
             contacts = p.getClosestPoints(
-                cid, self.robot.robot_id, distance=distance, physicsClientId=self.pid
+                cid,
+                self.robot.robot_id,
+                distance=distance,
+                physicsClientId=self.pid,
             )
             if len(contacts) > 0:
                 print('collision happened between robot and ', c_name)
@@ -230,7 +247,8 @@ class ExecutionSystem():
                 )
                 if len(contacts) > 0:
                     print(
-                        'collision happened between attached object and object ', obj_id
+                        'collision happened between attached object and object ',
+                        obj_id,
                     )
                     # input('press Enter')
                     return True
@@ -420,7 +438,7 @@ class ExecutionSystem():
             if obj_pid in self.ignore_ids:
                 continue
             obj_msg = self.obj2msg(obj_pid)
-            self.publisher.publish(obj_msg)
+            self.obj_pub.publish(obj_msg)
             # print(obj_msg)
 
     def obj2msg(self, object_id, use_collision=True):
@@ -454,7 +472,7 @@ class ExecutionSystem():
             )
             return None
         else:
-            SCALE = 1.10
+            SCALE = 1.0
             obj_msg.type = PercievedObject.SOLID_PRIMITIVE
             if shape[2] == p.GEOM_BOX:
                 obj_msg.solid.type = SolidPrimitive.BOX

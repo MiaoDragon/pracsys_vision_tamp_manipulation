@@ -29,6 +29,7 @@ add_message_files(
   DIRECTORY msg
   FILES
   RobotState.msg
+  PercievedObject.msg
 )
 
 add_service_files(

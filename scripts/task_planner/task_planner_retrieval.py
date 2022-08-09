@@ -119,11 +119,34 @@ class TaskPlanner():
 
         self.pipeline_sim()
         for obj_id, obj in self.perception.objects.items():
+            print(obj_id, obj.pybullet_id)
+            # print(
+            #     p.getCollisionShapeData(
+            #         obj.pybullet_id,
+            #         -1,
+            #         physicsClientId=self.planner.scene.robot.pybullet_id,
+            #     )
+            # )
+        print(self.planner.scene.robot.pybullet_id)
+        print(self.execution.scene.robot.pybullet_id)
+        print("Planner:")
+        for i in range(p.getNumBodies(physicsClientId=self.planner.scene.robot.pybullet_id)):
+            uid = p.getBodyUniqueId(
+                i, physicsClientId=self.planner.scene.robot.pybullet_id
+            )
+            print(uid)
             print(
-                p.getCollisionShapeData(
-                    obj.pybullet_id,
-                    -1,
-                    physicsClientId=self.execution.scene.robot.pybullet_id,
+                p.getBodyInfo(uid, physicsClientId=self.planner.scene.robot.pybullet_id)
+            )
+        print("Execution:")
+        for i in range(p.getNumBodies(physicsClientId=self.execution.scene.robot.pybullet_id)):
+            uid = p.getBodyUniqueId(
+                i, physicsClientId=self.execution.scene.robot.pybullet_id
+            )
+            print(uid)
+            print(
+                p.getBodyInfo(
+                    uid, physicsClientId=self.execution.scene.robot.pybullet_id
                 )
             )
 

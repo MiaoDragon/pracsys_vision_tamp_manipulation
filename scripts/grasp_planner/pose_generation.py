@@ -65,7 +65,6 @@ def geometric_suction_grasp_pose_generation(
     obj_pos, obj_rot = p.getBasePositionAndOrientation(object_id, pybullet_id)
     # obj_pos_in, obj_rot_in = p.invertTransform(obj_pos, obj_rot)
     # gw = robot.right_flim[1] * 2  # gripper width
-    gw = robot.right_flim[1] * 2  # gripper width
 
     def nearOdd(n):
         return round((n - 1) / 2) * 2 + 1
@@ -99,17 +98,18 @@ def geometric_suction_grasp_pose_generation(
         #     for x in np.linspace(-(nox - 1) / (2 * nox), (nox - 1) / (2 * nox), nox):
         #         grasps.append([[x * sx, 0, sz / 2], vert[0]])  # top
         #         grasps.append([[x * sx, 0, sz / 2], vert[2]])  # top
-        for z in np.linspace(-0.9, 0.9, res):
-            for y in np.linspace(-0.9, 0.9, res):
+        for z in np.linspace(-0.3, 0.3, res):
+            for y in np.linspace(-0.3, 0.3, res):
                 grasps.append([[-sx / 2, y * sy, z * sz], horz[4]])  # front
                 grasps.append([[-sx / 2, y * sy, z * sz], horz[10]])  # front
 
-        offset1 = (offset1[0], offset1[1], offset1[2] + gw * 0.75)
+        # offset1 = (offset1[0], offset1[1], offset1[2] + gw * 0.75)
     elif shape[2] == p.GEOM_CYLINDER or shape[2] == p.GEOM_CAPSULE:
         h, r = shape[3][:2]
-        noz = nearOdd(h / (gw))
-        for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
-            grasps += [[(0, 0, z * h), o] for o in vert]
+        # noz = nearOdd(h / (gw))
+        # for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
+        for z in np.linspace(-0.3, 0.3, res):
+            # grasps += [[(0, 0, z * h), o] for o in vert]
             grasps += [
                 [(0, 0, z * h), o]
                 for o in horz[hres * ((res - 1) // 4):hres * ((res + 3) // 4)]
@@ -119,10 +119,11 @@ def geometric_suction_grasp_pose_generation(
                 for o in horz[hres * ((-res - 1) // 4):hres * ((-res + 3) // 4)]
             ]
 
-        offset1 = (offset1[0], offset1[1], offset1[2] + r / 2)
+        offset1 = (offset1[0], offset1[1], offset1[2] - r)
     elif shape[2] == p.GEOM_SPHERE:
         r = shape[3][0]
-        grasps = [[(0, 0, 0), o] for o in vert + horz]
+        # grasps = [[(0, 0, 0), o] for o in vert + horz]
+        grasps = [[(0, 0, 0), o] for o in horz]
     # elif shape[2] == p.GEOM_MESH:
     # elif shape[2] == p.GEOM_PLANE:
 
@@ -151,6 +152,7 @@ def geometric_suction_grasp_pose_generation(
         pose2 = [tpos2, trot2]
         poses.append([pose1, pose2])
 
+    # endEffectorId = robot.total_link_name_ind_dict[robot.tip_link_name]
     endEffectorId = robot.tip_link_name
     grasps = poses
 
@@ -161,7 +163,7 @@ def geometric_suction_grasp_pose_generation(
         pos2, rot2 = pose2
         # self.set_joints(self.nuetral_joints)
         robot.set_joints_without_memorize(robot.init_joint_vals)
-        # jointPoses, dist = self.accurateIK(
+        # jointPoses, dist = robot.accurateIK(
         valid, jointPoses = robot.get_ik(
             endEffectorId,
             pos1,
@@ -172,11 +174,10 @@ def geometric_suction_grasp_pose_generation(
         # input(rot1)
         # if dist < filterThreshold:  # filter by succesful IK
         if valid:
-            robot.set_gripper(endEffectorId, 'open', reset=True)
+            # robot.set_gripper(endEffectorId, 'open', reset=True)
             joint_states = [
                 x[0] for x in p.getJointStates(robot.robot_id, range(robot.num_joints))
             ]
-            # filteredJointPoses.append(jointPoses)
             ignore_ids = collision_ignored + [robot.robot_id]
             collisions = set()
             for i in range(p.getNumBodies(physicsClientId=pybullet_id)):
@@ -199,7 +200,7 @@ def geometric_suction_grasp_pose_generation(
                         'eof_pose': list(pos1) + list(rot1),
                         'eof_pose_offset': list(pos2) + list(rot2),
                         'collisions': collisions,
-                        'dist': dist
+                        # 'dist': dist
                     }
                 )
 
@@ -208,7 +209,10 @@ def geometric_suction_grasp_pose_generation(
 
     # return pose and collisions in sorted order
     filteredJointPoses = sorted(
-        filteredJointPoses, key=lambda x: (len(x['collisions']), x['dist'])
+        # filteredJointPoses,
+        # key=lambda x: (len(x['collisions']), x['dist']),
+        filteredJointPoses,
+        key=lambda x: len(x['collisions'])
     )
     return filteredJointPoses
 
@@ -599,11 +603,12 @@ def grasp_pose_generation(
             quat = tf.quaternion_from_matrix(rot_mat)  # w x y z
             valid, dof_joint_vals = robot.get_ik(
                 robot.tip_link_name,
-                transformed_suction_pts[i], [quat[1], quat[2], quat[3], quat[0]],
+                transformed_suction_pts[i],
+                [quat[1], quat[2], quat[3], quat[0]],
                 robot.joint_vals,
                 collision_check=True,
                 workspace=workspace,
-                visualize=visualize
+                visualize=visualize,
             )
             if not valid:
                 # ik failed. next

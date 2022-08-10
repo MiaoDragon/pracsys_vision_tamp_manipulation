@@ -47,7 +47,7 @@ class PrimitivePlanner():
         self.num_executed_actions = 0
         self.num_collision = 0
 
-    def grasp_test(self, obj, suction_joint, start_joint_dict):
+    def grasp_test(self, obj):
         # robot = self.scene.robot
         robot = self.execution.scene.robot
 
@@ -69,7 +69,7 @@ class PrimitivePlanner():
             # for iters in range(1000):
             #     robot.setMotors(sparse_pose)
             #     p.stepSimulation()
-            robot.set_joints_without_memorize(pose)
+            robot.set_joints_without_memorize(sparse_pose)
         input("Done...")
         robot.set_joints_without_memorize(robot.joint_vals)
 

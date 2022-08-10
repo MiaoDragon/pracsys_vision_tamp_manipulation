@@ -96,7 +96,7 @@ class TaskPlanner():
         self.execution_calls = 0
         self.rearrange_calls = 0
 
-        self.pipeline_sim()
+        # self.pipeline_sim()
         input('press to start...')
         self.num_executed_actions = 0
         self.num_collision = 0
@@ -117,36 +117,16 @@ class TaskPlanner():
 
         start_time = time.time()
 
-        self.pipeline_sim()
+        # self.pipeline_sim()
+        print(self.execution.object_local_id_dict)
         for obj_id, obj in self.perception.objects.items():
-            print(obj_id, obj.pybullet_id)
-            # print(
-            #     p.getCollisionShapeData(
-            #         obj.pybullet_id,
-            #         -1,
-            #         physicsClientId=self.planner.scene.robot.pybullet_id,
-            #     )
-            # )
-        print(self.planner.scene.robot.pybullet_id)
-        print(self.execution.scene.robot.pybullet_id)
-        print("Planner:")
-        for i in range(p.getNumBodies(physicsClientId=self.planner.scene.robot.pybullet_id)):
-            uid = p.getBodyUniqueId(
-                i, physicsClientId=self.planner.scene.robot.pybullet_id
-            )
-            print(uid)
+            local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+            print(obj_id)  #, obj.pybullet_id, local_id)
             print(
-                p.getBodyInfo(uid, physicsClientId=self.planner.scene.robot.pybullet_id)
-            )
-        print("Execution:")
-        for i in range(p.getNumBodies(physicsClientId=self.execution.scene.robot.pybullet_id)):
-            uid = p.getBodyUniqueId(
-                i, physicsClientId=self.execution.scene.robot.pybullet_id
-            )
-            print(uid)
-            print(
-                p.getBodyInfo(
-                    uid, physicsClientId=self.execution.scene.robot.pybullet_id
+                p.getCollisionShapeData(
+                    local_id,
+                    -1,
+                    physicsClientId=self.planner.scene.robot.pybullet_id,
                 )
             )
 
@@ -154,12 +134,12 @@ class TaskPlanner():
         pose_ind = input("Please Enter Object Id: ")
         while pose_ind != 'q':
             try:
-                obj_id = int(pose_ind[0])
-            except IndexError:
+                obj_id = int(pose_ind)
+                self.planner.grasp_test(self.perception.objects[obj_id])
+            except (IndexError, ValueError):
                 pose_ind = input("Please Enter Object Id: ")
                 continue
 
-            self.planner.grasp_test
             pose_ind = input("Please Enter Object Id: ")
         ### Grasp Sampling Test End ###
         sys.exit(0)

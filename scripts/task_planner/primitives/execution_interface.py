@@ -270,12 +270,12 @@ class ExecutionInterface():
         ]
         if msg.name not in self.object_local_id_dict:
             shape_type = self.shape_type_dict[msg.solid.type]
-            print(
-                shape_type,
-                msg.solid.dimensions,
-                position,
-                orientation,
-            )
+            # print(
+            #     shape_type,
+            #     msg.solid.dimensions,
+            #     position,
+            #     orientation,
+            # )
             oid = self.spawn_object(
                 shape_type,
                 msg.solid.dimensions,

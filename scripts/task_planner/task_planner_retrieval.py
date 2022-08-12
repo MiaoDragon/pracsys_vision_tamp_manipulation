@@ -1,7 +1,7 @@
 """
 The high-level symbolic task planner, where actions are implemented by
 primitives.
-Since the task planner does not deal with details of implementations, an 
+Since the task planner does not deal with details of implementations, an
 abstract search process can proceed which can generate a skeleton of the
 task, later to be verified by lower-level the primitive planner.
 """
@@ -142,16 +142,15 @@ class TaskPlanner():
 
             pose_ind = input("Please Enter Object Id: ")
         ### Grasp Sampling Test End ###
-        sys.exit(0)
 
 
 def main():
     rospy.init_node("task_planner")
-    rospy.sleep(1.0)
+    rospy.on_shutdown(lambda :os.system('pkill -9 -f task_planner'))
+    # rospy.sleep(1.0)
     scene_name = 'scene2'
     prob_id = sys.argv[1]
     # trial_num = int(sys.argv[2])
-
     task_planner = TaskPlanner(scene_name, prob_id)
     # input('ENTER to start planning...')
     print('pid: ', task_planner.scene.pid)

@@ -177,12 +177,12 @@ class ExecutionSystem():
         self.rgb_img, self.depth_img, self.seg_img = self.camera.sense()
         self.robot_state = self.robot.joint_dict
 
-        self.rgb_cam_pub = rospy.Publisher('rgb_image', Image)
-        self.depth_cam_pub = rospy.Publisher('depth_image', Image)
-        self.seg_cam_pub = rospy.Publisher('seg_image', Image)
-        self.rs_pub = rospy.Publisher('robot_state_publisher', RobotState)
-        self.js_pub = rospy.Publisher('joint_states', JointState)
-        self.obj_pub = rospy.Publisher('object_state', PercievedObject)
+        self.rgb_cam_pub = rospy.Publisher('rgb_image', Image, queue_size=5)
+        self.depth_cam_pub = rospy.Publisher('depth_image', Image, queue_size=5)
+        self.seg_cam_pub = rospy.Publisher('seg_image', Image, queue_size=5)
+        self.rs_pub = rospy.Publisher('robot_state_publisher', RobotState, queue_size=5)
+        self.js_pub = rospy.Publisher('joint_states', JointState, queue_size=5)
+        self.obj_pub = rospy.Publisher('object_state', PercievedObject, queue_size=5)
 
         # ignore robot and table when publishing object states
         self.ignore_ids = {0, 1, 2, 3, 4, 5}
@@ -512,7 +512,8 @@ class ExecutionSystem():
 
 def main():
     rospy.init_node("execution_system")
-    rospy.sleep(1.0)
+    rospy.on_shutdown(lambda :os.system('pkill -9 -f task_planner'))
+    # rospy.sleep(1.0)
     scene_name = 'scene2'
 
     if int(sys.argv[1]) > 0:

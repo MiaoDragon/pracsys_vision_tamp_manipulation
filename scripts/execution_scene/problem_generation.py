@@ -1255,7 +1255,7 @@ def load_problem_level(
 
         x, y, z = obj_poses[i][:3, 3]
         z_offset = 0.001
-        z = workspace_low[2] + z_size / 2 + z_offset
+        # z = workspace_low[2] + z_size / 2 + z_offset
 
         if obj_shape != 'cylinder':
             # sample a pose in the workspace

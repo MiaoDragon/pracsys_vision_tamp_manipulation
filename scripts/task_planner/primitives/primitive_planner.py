@@ -70,6 +70,7 @@ class PrimitivePlanner():
             #     robot.setMotors(sparse_pose)
             #     p.stepSimulation()
             robot.set_joints_without_memorize(sparse_pose)
+            print(cols)
         input("Done...")
         robot.set_joints_without_memorize(robot.joint_vals)
 

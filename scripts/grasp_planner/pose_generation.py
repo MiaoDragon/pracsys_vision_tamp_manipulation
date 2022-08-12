@@ -63,6 +63,7 @@ def geometric_suction_grasp_pose_generation(
 
     # object position and orientation
     obj_pos, obj_rot = p.getBasePositionAndOrientation(object_id, pybullet_id)
+
     # obj_pos_in, obj_rot_in = p.invertTransform(obj_pos, obj_rot)
     # gw = robot.right_flim[1] * 2  # gripper width
 
@@ -192,7 +193,8 @@ def geometric_suction_grasp_pose_generation(
                 )
                 if len(contacts):
                     collisions.add(obj_pid)
-            if 1 not in collisions:  # dont add if collides with table
+            # dont add if collides with shelf
+            if not collisions.intersection([1, 2, 3, 4, 5]):
                 filteredJointPoses.append(
                     {
                         'all_joints': joint_states,

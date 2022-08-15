@@ -61,6 +61,7 @@ class MotionPlanner():
         # set up workspace collision
         components = workspace.components
         for component_name, component in components.items():
+            print(component_name, component)
             shape = component['shape']
             shape = np.array(shape)
             pos = component['pose']['pos']
@@ -351,7 +352,10 @@ class MotionPlanner():
         joint_state = JointState()
         # joint_state.header = Header()
         # joint_state.header.stamp = rospy.Time.now()
-        names = list(start_joint_dict.keys())
+        names = list(filter(
+            lambda x:'right' not in x,
+            start_joint_dict.keys()
+        ))
         vals = []
         for i in range(len(names)):
             vals.append(start_joint_dict[names[i]])
@@ -419,8 +423,7 @@ class MotionPlanner():
         # convert from joint dict to joint list
         start_joint = []
         for i in range(len(robot.joint_names)):
-            if robot.joint_names[i] in start_joint_dict:
-                start_joint.append(start_joint_dict[robot.joint_names[i]])
+            start_joint.append(start_joint_dict[robot.joint_names[i]])
 
         prev_joint = start_joint
 

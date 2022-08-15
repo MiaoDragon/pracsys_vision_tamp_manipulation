@@ -180,7 +180,7 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
                 if obj_shape == 'ontop':
                     prev_ind = random.randint(0, i - 1)
                     x, y = obj_poses[prev_ind][:2, 3]
-                    z = 0
+                    z = 0.001
                     z += obj_tops[prev_ind] + z_size
                 else:
                     x = np.random.uniform(

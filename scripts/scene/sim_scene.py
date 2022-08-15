@@ -38,10 +38,11 @@ class SimScene():
 
 
         joints = [0,
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
+                # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
+                1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
                 1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
                 ]
-        robot.set_joints(joints)  # 
+        robot.set_joints(joints)
 
         workspace_low = scene_dict['workspace']['region_low']
         workspace_high = scene_dict['workspace']['region_high']

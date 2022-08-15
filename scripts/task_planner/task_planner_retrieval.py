@@ -121,16 +121,17 @@ class TaskPlanner():
         print(self.execution.object_local_id_dict)
         for obj_id, obj in self.perception.objects.items():
             local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
-            print(obj_id)  #, obj.pybullet_id, local_id)
+            print(obj_id, local_id)  #, obj.pybullet_id, local_id)
             print(
                 p.getCollisionShapeData(
                     local_id,
                     -1,
-                    physicsClientId=self.planner.scene.robot.pybullet_id,
+                    physicsClientId=self.execution.scene.robot.pybullet_id,
                 )
             )
 
         ### Grasp Sampling Test ###
+        print("Grasp Test")
         pose_ind = input("Please Enter Object Id: ")
         while pose_ind != 'q':
             try:
@@ -143,10 +144,24 @@ class TaskPlanner():
             pose_ind = input("Please Enter Object Id: ")
         ### Grasp Sampling Test End ###
 
+        ### Pick Test ###
+        print("Pick Test")
+        pose_ind = input("Please Enter Object Id: ")
+        while pose_ind != 'q':
+            try:
+                obj_id = int(pose_ind)
+                self.planner.pick(self.perception.objects[obj_id])
+            except (IndexError, ValueError):
+                pose_ind = input("Please Enter Object Id: ")
+                continue
+
+            pose_ind = input("Please Enter Object Id: ")
+        ### Pick Test End ###
+
 
 def main():
     rospy.init_node("task_planner")
-    rospy.on_shutdown(lambda :os.system('pkill -9 -f task_planner'))
+    rospy.on_shutdown(lambda: os.system('pkill -9 -f task_planner'))
     # rospy.sleep(1.0)
     scene_name = 'scene2'
     prob_id = sys.argv[1]

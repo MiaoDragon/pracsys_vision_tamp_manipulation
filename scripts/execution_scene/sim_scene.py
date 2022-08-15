@@ -96,8 +96,8 @@ class ExecutionSystem():
                     num_hiding_objs=1,
                 )
                 pid, scene_f, robot, workspace, camera, obj_poses, obj_pcds, obj_ids, \
-                        obj_shapes, obj_sizes, target_pose, target_pcd, target_obj_id, \
-                        target_obj_shape, target_obj_size = data
+                        obj_shapes, obj_sizes, obj_colors, target_pose, target_pcd, target_obj_id, \
+                        target_obj_shape, target_obj_size, target_obj_color = data
                 data = (
                     scene_f,
                     obj_poses,
@@ -512,7 +512,7 @@ class ExecutionSystem():
 
 def main():
     rospy.init_node("execution_system")
-    rospy.on_shutdown(lambda :os.system('pkill -9 -f task_planner'))
+    rospy.on_shutdown(lambda: os.system('pkill -9 -f task_planner'))
     # rospy.sleep(1.0)
     scene_name = 'scene2'
 

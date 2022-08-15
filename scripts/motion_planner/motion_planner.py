@@ -419,7 +419,8 @@ class MotionPlanner():
         # convert from joint dict to joint list
         start_joint = []
         for i in range(len(robot.joint_names)):
-            start_joint.append(start_joint_dict[robot.joint_names[i]])
+            if robot.joint_names[i] in start_joint_dict:
+                start_joint.append(start_joint_dict[robot.joint_names[i]])
 
         prev_joint = start_joint
 

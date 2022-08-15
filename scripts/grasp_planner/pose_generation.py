@@ -10,7 +10,8 @@ from tqdm import trange
 
 
 def geometric_suction_grasp_pose_generation(
-    obj,
+    # obj,
+    object_id,
     robot,
     workspace,
     offset1=(0, 0, 0.0),
@@ -28,15 +29,13 @@ def geometric_suction_grasp_pose_generation(
 
     # the following is just for autocompletion
     if False:
-        from perception.object_belief import ObjectBelief
         from scene.workspace import Workspace
         from scene.robot import Robot
-        obj = ObjectBelief()
         robot = Robot()
         workspace = Workspace()
     # comment out above during execution
 
-    object_id = obj.pybullet_id
+    # object_id = obj.pybullet_id
     pybullet_id = robot.pybullet_id
 
     shape = p.getCollisionShapeData(object_id, -1, pybullet_id)[0]

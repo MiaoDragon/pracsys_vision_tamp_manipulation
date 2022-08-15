@@ -45,7 +45,7 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
     rp = rospkg.RosPack()
     package_path = rp.get_path('vbcpm_execution_system')
     urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
-    joints = [0.] * 16
+    # joints = [0.] * 16
 
     ll = [-1.58, \
         -3.13, -1.90, -2.95, -2.36, -3.13, -1.90, -3.13, \
@@ -68,24 +68,13 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
         [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
     )
 
-    joints = [
-        0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,  # left (suction)
-        1.75,
-        0.8,
-        0.0,
-        -0.66,
-        0.0,
-        0.0,
-        0.0,  # right
-    ]
-    robot.set_joints(joints)  #
+
+    joints = [0,
+            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
+            ]
+    robot.set_joints(joints)
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -302,13 +291,13 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
         obj_ids,
         obj_shapes,
         obj_sizes,
-        # obj_colors,
+        obj_colors,
         obj_poses[0],
         obj_pcds[0],
         obj_ids[0],
         obj_shapes[0],
         obj_sizes[0],
-        # obj_colors[0],
+        obj_colors[0],
     )
 
 
@@ -329,7 +318,7 @@ def random_one_problem(scene, level, num_objs, num_hiding_objs, safety_padding=0
     rp = rospkg.RosPack()
     package_path = rp.get_path('vbcpm_execution_system')
     urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
-    joints = [0.] * 16
+    # joints = [0.] * 16
 
     ll = [-1.58, \
         -3.13, -1.90, -2.95, -2.36, -3.13, -1.90, -3.13, \
@@ -352,24 +341,12 @@ def random_one_problem(scene, level, num_objs, num_hiding_objs, safety_padding=0
         [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
     )
 
-    joints = [
-        0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,  # left (suction)
-        1.75,
-        0.8,
-        0.0,
-        -0.66,
-        0.0,
-        0.0,
-        0.0,  # right
-    ]
-    robot.set_joints(joints)  #
+    joints = [0,
+            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
+            ]
+    robot.set_joints(joints)
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -664,7 +641,7 @@ def load_problem(
     rp = rospkg.RosPack()
     package_path = rp.get_path('vbcpm_execution_system')
     urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
-    joints = [0.] * 16
+    # joints = [0.] * 16
 
     ll = [-1.58, \
         -3.13, -1.90, -2.95, -2.36, -3.13, -1.90, -3.13, \
@@ -687,24 +664,12 @@ def load_problem(
         [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
     )
 
-    joints = [
-        0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,  # left (suction)
-        1.75,
-        0.8,
-        0.0,
-        -0.66,
-        0.0,
-        0.0,
-        0.0,  # right
-    ]
-    robot.set_joints(joints)  #
+    joints = [0,
+            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
+            ]
+    robot.set_joints(joints)
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -802,7 +767,7 @@ def random_one_problem_level(
     print(package_path)
     urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
     print(urdf_path)
-    joints = [0.] * 16
+    # joints = [0.] * 16
 
     ll = [-1.58, \
         -3.13, -1.90, -2.95, -2.36, -3.13, -1.90, -3.13, \
@@ -825,24 +790,12 @@ def random_one_problem_level(
         [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
     )
 
-    joints = [
-        0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,  # left (suction)
-        1.75,
-        0.8,
-        0.0,
-        -0.66,
-        0.0,
-        0.0,
-        0.0,  # right
-    ]
-    robot.set_joints(joints)  #
+    joints = [0,
+            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
+            ]
+    robot.set_joints(joints)
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -1178,7 +1131,7 @@ def load_problem_level(
     rp = rospkg.RosPack()
     package_path = rp.get_path('vbcpm_execution_system')
     urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
-    joints = [0.] * 16
+    # joints = [0.] * 16
 
     ll = [-1.58, \
         -3.13, -1.90, -2.95, -2.36, -3.13, -1.90, -3.13, \
@@ -1201,24 +1154,12 @@ def load_problem_level(
         [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
     )
 
-    joints = [
-        0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,  # left (suction)
-        1.75,
-        0.8,
-        0.0,
-        -0.66,
-        0.0,
-        0.0,
-        0.0,  # right
-    ]
-    robot.set_joints(joints)  #
+    joints = [0,
+            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
+            ]
+    robot.set_joints(joints)
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -1309,7 +1250,7 @@ def random_one_problem_ycb(scene, level, num_objs, num_hiding_objs, safety_paddi
     rp = rospkg.RosPack()
     package_path = rp.get_path('vbcpm_execution_system')
     urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
-    joints = [0.] * 16
+    # joints = [0.] * 16
 
     ll = [-1.58, \
         -3.13, -1.90, -2.95, -2.36, -3.13, -1.90, -3.13, \
@@ -1332,24 +1273,12 @@ def random_one_problem_ycb(scene, level, num_objs, num_hiding_objs, safety_paddi
         [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
     )
 
-    joints = [
-        0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,  # left (suction)
-        1.75,
-        0.8,
-        0.0,
-        -0.66,
-        0.0,
-        0.0,
-        0.0,  # right
-    ]
-    robot.set_joints(joints)  #
+    joints = [0,
+            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
+            ]
+    robot.set_joints(joints)
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -1690,7 +1619,7 @@ def load_problem_ycb(scene, obj_poses, obj_shapes, target_pose, target_obj_shape
     rp = rospkg.RosPack()
     package_path = rp.get_path('vbcpm_execution_system')
     urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
-    joints = [0.] * 16
+    # joints = [0.] * 16
 
     ll = [-1.58, \
         -3.13, -1.90, -2.95, -2.36, -3.13, -1.90, -3.13, \
@@ -1713,24 +1642,12 @@ def load_problem_ycb(scene, obj_poses, obj_shapes, target_pose, target_obj_shape
         [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
     )
 
-    joints = [
-        0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,  # left (suction)
-        1.75,
-        0.8,
-        0.0,
-        -0.66,
-        0.0,
-        0.0,
-        0.0,  # right
-    ]
-    robot.set_joints(joints)  #
+    joints = [0,
+            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
+            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
+            ]
+    robot.set_joints(joints)
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']

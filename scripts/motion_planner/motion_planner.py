@@ -1,41 +1,38 @@
 """
 an interface for motion planning queries
 """
-from moveit_commander import move_group
+import os
+import gc
+import sys
+import copy
+import psutil
+import objgraph
+import numpy as np
+import open3d as o3d
+from memory_profiler import profile
+
 import rospy
 import moveit_commander
-from moveit_msgs.srv import GetStateValidityRequest, GetStateValidity
-import numpy as np
-from sensor_msgs.msg import PointCloud2, Image
-import sensor_msgs
-
-import sensor_msgs.point_cloud2 as pcl2
-from moveit_msgs.msg import PlanningScene, CollisionObject, AttachedCollisionObject
-
-from shape_msgs.msg import SolidPrimitive, Plane, Mesh, MeshTriangle
+import transformations as tf
+from moveit_commander import move_group
 
 import std_msgs
-from geometry_msgs.msg import PoseStamped, Point
-import transformations as tf
-from std_srvs.srv import Empty
+import sensor_msgs
+import sensor_msgs.point_cloud2 as pcl2
+from geometry_msgs.msg import PoseStamped, Pose, Point
+from sensor_msgs.msg import JointState, PointCloud2, Image
+from shape_msgs.msg import SolidPrimitive, Plane, Mesh, MeshTriangle
+from moveit_msgs.msg import RobotState, DisplayRobotState, PlanningScene, CollisionObject, AttachedCollisionObject
 
-from moveit_msgs.msg import RobotState, DisplayRobotState
-from sensor_msgs.msg import JointState
-import sys
+from std_srvs.srv import Empty
+from moveit_msgs.srv import GetStateValidityRequest, GetStateValidity
 
 from utils.visual_utils import *
-import open3d as o3d
+from pracsys_vision_tamp_manipulation.msg import PercievedObject
 
-from geometry_msgs.msg import Pose, Point
-from shape_msgs.msg import SolidPrimitive, Plane, Mesh, MeshTriangle
 
-from memory_profiler import profile
-import os
-import psutil
-
-import objgraph
-import gc
 class MotionPlanner():
+
     def __init__(self, robot, workspace, commander_args=[]):
         # set up the scene
         moveit_commander.roscpp_initialize(commander_args)
@@ -54,11 +51,29 @@ class MotionPlanner():
         self.workspace = workspace
 
         self.pcd_topic = '/perception/points'
-        self.pcd_pub = rospy.Publisher(self.pcd_topic, PointCloud2, queue_size=3, latch=True)
+        self.pcd_pub = rospy.Publisher(
+            self.pcd_topic,
+            PointCloud2,
+            queue_size=3,
+            latch=True,
+        )
 
-        self.co_pub = rospy.Publisher('/collision_object', CollisionObject, queue_size=3, latch=True)
+        self.co_pub = rospy.Publisher(
+            '/collision_object',
+            CollisionObject,
+            queue_size=3,
+            latch=True,
+        )
 
-        self.rs_pub = rospy.Publisher('/display_robot_state', DisplayRobotState, queue_size=3, latch=True)
+        self.rs_pub = rospy.Publisher(
+            '/display_robot_state',
+            DisplayRobotState,
+            queue_size=3,
+            latch=True,
+        )
+
+        self.workspace_component_names = set(workspace.components.keys())
+
         # set up workspace collision
         components = workspace.components
         for component_name, component in components.items():
@@ -68,10 +83,10 @@ class MotionPlanner():
             pos = component['pose']['pos']
             ori = component['pose']['ori']  # x y z w
             # transform from workspace to robot
-            mat = tf.quaternion_matrix([ori[3], ori[0], ori[1], ori[2]]) # tf: w x y z
-            mat[:3,3] = pos
+            mat = tf.quaternion_matrix([ori[3], ori[0], ori[1], ori[2]])  # tf: w x y z
+            mat[:3, 3] = pos
             mat = robot.world_in_robot.dot(mat)
-            self.add_box(component_name, mat, [shape[0],shape[1],shape[2]])
+            self.add_box(component_name, mat, [shape[0], shape[1], shape[2]])
             rospy.sleep(1.0)
 
             # self.scene_interface.add_box(name=component_name, pose=)
@@ -88,7 +103,7 @@ class MotionPlanner():
         #     print('contact: ')
         #     for i in range(len(result.contacts)):
         #         print('contact_body_1: %s, type: %d' % (result.contacts[i].contact_body_1, result.contacts[i].body_type_1))
-        #         print('contact_body_2: %s, type: %d' % (result.contacts[i].contact_body_2, result.contacts[i].body_type_2))   
+        #         print('contact_body_2: %s, type: %d' % (result.contacts[i].contact_body_2, result.contacts[i].body_type_2))
         return result
 
     def clear_octomap(self):
@@ -104,7 +119,7 @@ class MotionPlanner():
             del resp1
 
         except rospy.ServiceException as e:
-            print("Service call failed: %s"%e)
+            print("Service call failed: %s" % e)
             sys.exit(1)
 
         gc.collect()
@@ -125,8 +140,10 @@ class MotionPlanner():
         # * generate point cloud for occlusion space
         total_pcd = occlusion.sample_pcd(col_filter)
         # occupied_pcd = occlusion.sample_pcd(occupied)
-        total_pcd = occlusion.transform[:3,:3].dot(total_pcd.T).T + occlusion.transform[:3,3]
-        total_pcd = self.robot.world_in_robot[:3,:3].dot(total_pcd.T).T + self.robot.world_in_robot[:3,3]
+        total_pcd = occlusion.transform[:3, :3].dot(total_pcd.T).T
+        total_pcd += occlusion.transform[:3, 3]
+        total_pcd = self.robot.world_in_robot[:3, :3].dot(total_pcd.T).T
+        total_pcd += self.robot.world_in_robot[:3, 3]
         # publish the pcd to the rostopic of sensor
         header = std_msgs.msg.Header()
         header.frame_id = 'base'  # use robot base as frame
@@ -140,7 +157,6 @@ class MotionPlanner():
 
         gc.collect()
 
-
     def set_collision_env(self, occlusion, occluded, occupied):
         # pcd -> octomap
         # clear environment first
@@ -150,14 +166,15 @@ class MotionPlanner():
         #                                  occluded | occupied, [1,0,0])
         # o3d.visualization.draw_geometries([collision_voxel])
 
-
         # * generate point cloud for occlusion space
 
         occluded_pcd = occlusion.sample_pcd(occluded)
         occupied_pcd = occlusion.sample_pcd(occupied)
         total_pcd = np.concatenate([occluded_pcd, occupied_pcd], axis=0)
-        total_pcd = occlusion.transform[:3,:3].dot(total_pcd.T).T + occlusion.transform[:3,3]
-        total_pcd = self.robot.world_in_robot[:3,:3].dot(total_pcd.T).T + self.robot.world_in_robot[:3,3]
+        total_pcd = occlusion.transform[:3, :3].dot(total_pcd.T).T
+        total_pcd += occlusion.transform[:3, 3]
+        total_pcd = self.robot.world_in_robot[:3, :3].dot(total_pcd.T).T
+        total_pcd += self.robot.world_in_robot[:3, 3]
         # publish the pcd to the rostopic of sensor
         header = std_msgs.msg.Header()
         header.frame_id = 'base'  # use robot base as frame
@@ -214,7 +231,6 @@ class MotionPlanner():
         else:
             return joint_names, [], []
 
-    
     def format_joint_name_val_dict(self, joint_names, joint_vals):
         """
         given a list of joint_names and a list of joint_vals
@@ -228,7 +244,15 @@ class MotionPlanner():
             joint_dict_list.append(joint_dict)
         return joint_dict_list
 
-    def suction_plan(self, start_joint_dict, suction_pose, suction_joint, robot, workspace, display=False):
+    def suction_plan(
+        self,
+        start_joint_dict,
+        suction_pose,
+        suction_joint,
+        robot,
+        workspace,
+        display=False
+    ):
         """
         return a list of dict: [{joint_name -> joint_vals}]
         """
@@ -236,9 +260,9 @@ class MotionPlanner():
         self.scene_interface.remove_world_object('suction_object')
         # rospy.sleep(1.0)
         pre_pose_dist = 0.10
-        suction_pos = suction_pose[:3,3]
-        retreat_vec = -suction_pose[:3,2]  # z vec
-        pre_suction_pos = suction_pose[:3,3] + retreat_vec * pre_pose_dist
+        suction_pos = suction_pose[:3, 3]
+        retreat_vec = -suction_pose[:3, 2]  # z vec
+        pre_suction_pos = suction_pose[:3, 3] + retreat_vec * pre_pose_dist
         step = 0.01
         n_step = int(np.ceil(pre_pose_dist / step))
         step = pre_pose_dist / n_step
@@ -248,9 +272,9 @@ class MotionPlanner():
         quat = tf.quaternion_from_matrix(suction_pose)  # w x y z
         prev_suction_joint = suction_joint
         joint_vals.append(prev_suction_joint)
-        drange = 15*np.pi/180  # max range between points
-        padding = 0*np.pi/180
-        for i in range(1,n_step):
+        drange = 15 * np.pi / 180  # max range between points
+        padding = 0 * np.pi / 180
+        for i in range(1, n_step):
             if i == 0:
                 collision_check = False
             else:
@@ -258,17 +282,32 @@ class MotionPlanner():
             suction_pos_step = suction_pos + retreat_vec * i * step
             # get joints (through ik) for current step
 
-            ul = np.minimum(robot.sample_upper_lim-padding, prev_suction_joint+drange*np.ones(len(prev_suction_joint)))
-            ll = np.maximum(robot.sample_lower_lim+padding, prev_suction_joint-drange*np.ones(len(prev_suction_joint)))
+            ul = np.minimum(
+                robot.sample_upper_lim - padding,
+                prev_suction_joint + drange * np.ones(len(prev_suction_joint))
+            )
+            ll = np.maximum(
+                robot.sample_lower_lim + padding,
+                prev_suction_joint - drange * np.ones(len(prev_suction_joint))
+            )
             jr = np.array(robot.jr)
             jr[:len(ul)] = ul - ll
-            valid, suction_joint_step = robot.get_ik(robot.tip_link_name, suction_pos_step, 
-                                                    [quat[1],quat[2],quat[3],quat[0]], prev_suction_joint,
-                                                    lower_lim=ll, upper_lim=ul, jr=jr,
-                                                    collision_check=collision_check, workspace=workspace)
+            valid, suction_joint_step = robot.get_ik(
+                robot.tip_link_name,
+                suction_pos_step, [quat[1], quat[2], quat[3], quat[0]],
+                prev_suction_joint,
+                lower_lim=ll,
+                upper_lim=ul,
+                jr=jr,
+                collision_check=collision_check,
+                workspace=workspace
+            )
             if display:
                 input('step %d/%d..., valid: %d' % (i, n_step, valid))
-                joint_dict = self.format_joint_name_val_dict(robot.joint_names, [suction_joint_step])[0]
+                joint_dict = self.format_joint_name_val_dict(
+                    robot.joint_names,
+                    [suction_joint_step],
+                )[0]
                 rs = self.get_robot_state_from_joint_dict(joint_dict)
                 self.display_robot_state(rs)
 
@@ -277,15 +316,20 @@ class MotionPlanner():
                 joint_vals.append(prev_suction_joint)
 
         joint_vals = joint_vals[::-1]  # reverse: from pre_suction_pos to suction_pos
-        suction_joint_dict_list = self.format_joint_name_val_dict(robot.joint_names, joint_vals)
-        
+        suction_joint_dict_list = self.format_joint_name_val_dict(
+            robot.joint_names,
+            joint_vals,
+        )
 
         # * generate a plan from start_joint to pre_suction_joint
         pre_suction_joint_dict = suction_joint_dict_list[0]
         # print('suction_plan calling motion_plan_joint..')
         plan = self.motion_plan_joint(start_joint_dict, pre_suction_joint_dict, robot)
         joint_names, positions, _ = self.extract_plan_to_joint_list(plan)
-        pre_suction_joint_dict_list = self.format_joint_name_val_dict(joint_names, positions)
+        pre_suction_joint_dict_list = self.format_joint_name_val_dict(
+            joint_names,
+            positions,
+        )
 
         # input('after suction_plan, length of trajectory: %d' % (len(pre_suction_joint_dict_list)))
         if len(pre_suction_joint_dict_list) == 0:
@@ -293,8 +337,14 @@ class MotionPlanner():
         # concatenate the two list to return
         return pre_suction_joint_dict_list + suction_joint_dict_list
 
-    def suction_with_obj_plan(self, start_joint_dict, tip_pose_in_obj, target_joint_val, robot, 
-                                obj):
+    def suction_with_obj_plan(
+        self,
+        start_joint_dict,
+        tip_pose_in_obj,
+        target_joint_val,
+        robot,
+        obj,
+    ):
         """
         suction with the object attached to the robot
         create the object mesh from its point cloud or voxel info
@@ -307,18 +357,27 @@ class MotionPlanner():
 
         self.scene_interface.remove_world_object('suction_object')
         # rospy.sleep(1.0)
-        mesh_vertices, mesh_faces = self.create_mesh_from_voxel(obj.get_conservative_model(), obj)
-        co = self.add_mesh_from_vertices_and_faces(mesh_vertices, mesh_faces, obj_transform, 'suction_object')
+        mesh_vertices, mesh_faces = self.create_mesh_from_voxel(
+            obj.get_conservative_model(), obj
+        )
+        co = self.add_mesh_from_vertices_and_faces(
+            mesh_vertices,
+            mesh_faces,
+            obj_transform,
+            'suction_object',
+        )
         # attach the added mesh to robot link
         touch_links = ['motoman_right_ee', 'arm_right_link_tool0', 'motoman_right_hand']
         aco = self.attach_object(co, robot.tip_link_name, touch_links)
         # self.move_group.attach_object('suction_object', robot.tip_link_name)
         # rospy.sleep(1.0)
 
-
         # plan a trajectory from start joint to target joint
 
-        goal_joint_dict_list = self.format_joint_name_val_dict(robot.joint_names, [target_joint_val])
+        goal_joint_dict_list = self.format_joint_name_val_dict(
+            robot.joint_names,
+            [target_joint_val],
+        )
         goal_joint_dict = goal_joint_dict_list[0]
         new_goal_joint_dict = {}
         for name, val in goal_joint_dict.items():
@@ -326,7 +385,7 @@ class MotionPlanner():
                 continue
             new_goal_joint_dict[name] = val
         goal_joint_dict = new_goal_joint_dict
-        
+
         start_time = time.time()
         plan = self.motion_plan_joint(start_joint_dict, goal_joint_dict, robot, [aco])
         print('motion_plan_joint takes time: ', time.time() - start_time)
@@ -348,15 +407,18 @@ class MotionPlanner():
         joint_dict_list = self.format_joint_name_val_dict(joint_names, positions)
         return joint_dict_list
 
-    def motion_plan_joint(self, start_joint_dict, goal_joint_dict, robot, attached_acos=[]):
+    def motion_plan_joint(
+        self,
+        start_joint_dict,
+        goal_joint_dict,
+        robot,
+        attached_acos=[],
+    ):
 
         joint_state = JointState()
         # joint_state.header = Header()
         # joint_state.header.stamp = rospy.Time.now()
-        names = list(filter(
-            lambda x:'left' not in x,
-            start_joint_dict.keys()
-        ))
+        names = list(filter(lambda x: 'left' not in x, start_joint_dict.keys()))
         vals = []
         for i in range(len(names)):
             vals.append(start_joint_dict[names[i]])
@@ -384,35 +446,40 @@ class MotionPlanner():
         #         new_goal_joint_dict[robot.joint_names[i]] = robot.joint_vals[i]
         # goal_joint_dict = new_goal_joint_dict
 
-
-
         # self.move_group.set_planner_id('PersistentLazyPRM')
 
         # self.move_group.set_planner_id('BiTRRT')
         self.move_group.set_start_state(moveit_robot_state)
-        
+
         self.move_group.set_joint_value_target(goal_joint_dict)
 
         self.move_group.set_planning_time(14)
         self.move_group.set_num_planning_attempts(5)
         self.move_group.allow_replanning(False)
 
-
-        plan = self.move_group.plan()  # returned value: tuple (flag, RobotTrajectory, planning_time, error_code)
+        # returned value: tuple (flag, RobotTrajectory, planning_time, error_code)
+        plan = self.move_group.plan()
 
         # input("next...")
         del moveit_robot_state
         del new_goal_joint_dict
 
-        
         return plan
 
-    def straight_line_motion(self, start_joint_dict, start_tip_pose, relative_tip_pose, robot, workspace, 
-                            collision_check=False, display=False):
+    def straight_line_motion(
+        self,
+        start_joint_dict,
+        start_tip_pose,
+        relative_tip_pose,
+        robot,
+        workspace,
+        collision_check=False,
+        display=False
+    ):
         # given the start joint values and the relative tip pose to move, move in straight line
 
-        start_pos = start_tip_pose[:3,3]
-        move_vec = relative_tip_pose[:3,3]
+        start_pos = start_tip_pose[:3, 3]
+        move_vec = relative_tip_pose[:3, 3]
         pose_dist = np.linalg.norm(move_vec)
         move_vec = move_vec / pose_dist
         step = 0.005
@@ -430,9 +497,9 @@ class MotionPlanner():
 
         joint_vals = [prev_joint]
 
-        drange = 15*np.pi/180  # max range between points
-        padding = 0*np.pi/180
-        for i in range(1,n_step):
+        drange = 15 * np.pi / 180  # max range between points
+        padding = 0 * np.pi / 180
+        for i in range(1, n_step):
             tip_pos_step = tip_pos + move_vec * i * step
             # get joints (through ik) for current step
             if i == 0:
@@ -440,28 +507,41 @@ class MotionPlanner():
             else:
                 ik_collision_check = collision_check
             # lower limit, upper limit: using previous joint angles
-            ul = np.minimum(robot.sample_upper_lim-padding, prev_joint+drange*np.ones(len(prev_joint)))
-            ll = np.maximum(robot.sample_lower_lim+padding, prev_joint-drange*np.ones(len(prev_joint)))
+            ul = np.minimum(
+                robot.sample_upper_lim - padding,
+                prev_joint + drange * np.ones(len(prev_joint))
+            )
+            ll = np.maximum(
+                robot.sample_lower_lim + padding,
+                prev_joint - drange * np.ones(len(prev_joint))
+            )
             jr = np.array(robot.jr)
             jr[:len(ul)] = ul - ll
-            valid, joint_step = robot.get_ik(robot.tip_link_name, tip_pos_step, 
-                                                    [quat[1],quat[2],quat[3],quat[0]], prev_joint,
-                                                    lower_lim=ll, upper_lim=ul, jr=jr,
-                                                    collision_check=ik_collision_check, 
-                                                    workspace=workspace)
+            valid, joint_step = robot.get_ik(
+                robot.tip_link_name,
+                tip_pos_step, [quat[1], quat[2], quat[3], quat[0]],
+                prev_joint,
+                lower_lim=ll,
+                upper_lim=ul,
+                jr=jr,
+                collision_check=ik_collision_check,
+                workspace=workspace
+            )
             if display:
                 input('step %d/%d..., valid: %d' % (i, n_step, valid))
-                joint_dict = self.format_joint_name_val_dict(robot.joint_names, [joint_step])[0]
+                joint_dict = self.format_joint_name_val_dict(
+                    robot.joint_names,
+                    [joint_step],
+                )[0]
                 rs = self.get_robot_state_from_joint_dict(joint_dict)
                 self.display_robot_state(rs)
 
-                
             if valid:
                 prev_joint = joint_step
                 joint_vals.append(prev_joint)
 
         print('straight-line n_steps: ', len(joint_vals))
-        joint_dict_list = self.format_joint_name_val_dict(robot.joint_names, joint_vals)   
+        joint_dict_list = self.format_joint_name_val_dict(robot.joint_names, joint_vals)
 
         if display:
             del rs
@@ -475,7 +555,6 @@ class MotionPlanner():
         self.rs_pub.publish(msg)
         rospy.sleep(1.0)
 
-
     def get_state_validity(self, state, group_name="right_arm"):
         rospy.wait_for_service('/check_state_validity')
         sv_srv = rospy.ServiceProxy('/check_state_validity', GetStateValidity)
@@ -488,9 +567,8 @@ class MotionPlanner():
         #     print('contact: ')
         #     for i in range(len(result.contacts)):
         #         print('contact_body_1: %s, type: %d' % (result.contacts[i].contact_body_1, result.contacts[i].body_type_1))
-        #         print('contact_body_2: %s, type: %d' % (result.contacts[i].contact_body_2, result.contacts[i].body_type_2))   
+        #         print('contact_body_2: %s, type: %d' % (result.contacts[i].contact_body_2, result.contacts[i].body_type_2))
         return result
-
 
     def collision_check(self, state, model_name, group_name="right_arm"):
         res = self.get_state_validity(state)
@@ -499,31 +577,35 @@ class MotionPlanner():
         else:
             return False
         for i in range(len(res.contacts)):
-            if not (res.contacts[i].contact_body_1 == model_name and res.contacts[i].contact_body_2 == model_name):
+            if not (res.contacts[i].contact_body_1 == model_name
+                    and res.contacts[i].contact_body_2 == model_name):
                 # other cases, failure
                 return False
-        return True    
+        return True
 
     def create_mesh_from_voxel(self, filter, obj):
         voxel_x = obj.voxel_x
         voxel_y = obj.voxel_y
         voxel_z = obj.voxel_z
-        voxel_pts = np.array([voxel_x, voxel_y, voxel_z]).transpose([1,2,3,0])[filter].reshape(-1,3)
+        voxel_pts = np.array([voxel_x, voxel_y,voxel_z]) \
+                .transpose([1, 2, 3, 0])[filter] \
+                .reshape(-1, 3)
         voxel_pts_vertices = []
         vertex_items = []
-        for dx in [0,1]:
-            for dy in [0,1]:
-                for dz in [0,1]:
-                    voxel_pts_1 = voxel_pts + np.array([dx,dy,dz]).reshape(-1,3)
+        for dx in [0, 1]:
+            for dy in [0, 1]:
+                for dz in [0, 1]:
+                    voxel_pts_1 = voxel_pts + np.array([dx, dy, dz]).reshape(-1, 3)
                     voxel_pts_vertices.append(voxel_pts_1)
                     vertex_items.append(np.array([dx, dy, dz]))
         face_items = []
         for i in range(len(vertex_items)):
-            for j in range(i+1, len(vertex_items)):
-                for k in range(j+1, len(vertex_items)):
+            for j in range(i + 1, len(vertex_items)):
+                for k in range(j + 1, len(vertex_items)):
                     # the three vertices should lie on one plane (have one value identical)
-                    if ((vertex_items[i]==vertex_items[j]) & (vertex_items[j]==vertex_items[k])).sum()>0:
-                        face_items.append([i,j,k])
+                    if ((vertex_items[i] == vertex_items[j]) &
+                        (vertex_items[j] == vertex_items[k])).sum() > 0:
+                        face_items.append([i, j, k])
 
         voxel_pts_total = np.concatenate(voxel_pts_vertices, axis=0)
         voxel_pt_indices = np.array(list(range(len(voxel_pts))))
@@ -531,22 +613,23 @@ class MotionPlanner():
         for i in range(len(face_items)):
             face1 = face_items[i][0]
             face1 = vertex_items[face1]
-            face1_idx = face1[0]*4+face1[1]*2+face1[2]
+            face1_idx = face1[0] * 4 + face1[1] * 2 + face1[2]
             face2 = face_items[i][1]
             face2 = vertex_items[face2]
-            face2_idx = face2[0]*4+face2[1]*2+face2[2]
+            face2_idx = face2[0] * 4 + face2[1] * 2 + face2[2]
             face3 = face_items[i][2]
             face3 = vertex_items[face3]
-            face3_idx = face3[0]*4+face3[1]*2+face3[2]
+            face3_idx = face3[0] * 4 + face3[1] * 2 + face3[2]
 
-            face = [voxel_pt_indices+face1_idx*len(voxel_pts), 
-                    voxel_pt_indices+face2_idx*len(voxel_pts),
-                    voxel_pt_indices+face3_idx*len(voxel_pts)]
+            face = [
+                voxel_pt_indices + face1_idx * len(voxel_pts),
+                voxel_pt_indices + face2_idx * len(voxel_pts),
+                voxel_pt_indices + face3_idx * len(voxel_pts)
+            ]
             face = np.array(face).T
             voxel_face_total.append(face)
         voxel_face_total = np.concatenate(voxel_face_total, axis=0)
         voxel_pts_total = voxel_pts_total * obj.resol
-
 
         # voxel_pts_total_in_world = obj.transform[:3,:3].dot(voxel_pts_total.T).T + obj.transform[:3,3]
 
@@ -564,7 +647,6 @@ class MotionPlanner():
         # voxel_pts_total = np.asarray(cvx_hull.vertices)
         # voxel_face_total = np.asarray(cvx_hull.triangles)
 
-        
         del voxel_pt_indices
         del vertex_items
         del face_items
@@ -584,28 +666,28 @@ class MotionPlanner():
         mesh = Mesh()
         for i in range(len(faces)):
             triangle = MeshTriangle()
-            triangle.vertex_indices = [faces[i,0], faces[i,1], faces[i,2]] #[face[0], face[1], face[2]]
-            mesh.triangles.append(triangle)        
+            triangle.vertex_indices = [faces[i, 0], faces[i, 1], faces[i, 2]]
+            # triangle.vertex_indices = [face[0], face[1], face[2]]
+            mesh.triangles.append(triangle)
 
         for i in range(len(vertices)):
             point = Point()
-            point.x = vertices[i,0]
-            point.y = vertices[i,1]
-            point.z = vertices[i,2]
+            point.x = vertices[i, 0]
+            point.y = vertices[i, 1]
+            point.z = vertices[i, 2]
             mesh.vertices.append(point)
 
         co.meshes = [mesh]
 
         pose = Pose()
         quat = tf.quaternion_from_matrix(transform)  # w x y z
-        pose.position.x = transform[0,3]
-        pose.position.y = transform[1,3]
-        pose.position.z = transform[2,3]
+        pose.position.x = transform[0, 3]
+        pose.position.y = transform[1, 3]
+        pose.position.z = transform[2, 3]
         pose.orientation.w = quat[0]
         pose.orientation.x = quat[1]
         pose.orientation.y = quat[2]
         pose.orientation.z = quat[3]
-
 
         co.mesh_poses = [pose]
 
@@ -648,9 +730,9 @@ class MotionPlanner():
         co.pose.orientation.w = 1
 
         pose_stamped = PoseStamped()
-        pose_stamped.pose.position.x = pose[0,3]
-        pose_stamped.pose.position.y = pose[1,3]
-        pose_stamped.pose.position.z = pose[2,3]
+        pose_stamped.pose.position.x = pose[0, 3]
+        pose_stamped.pose.position.y = pose[1, 3]
+        pose_stamped.pose.position.z = pose[2, 3]
 
         quat = tf.quaternion_from_matrix(pose)  # w x y z
         pose_stamped.pose.orientation.x = quat[1]
@@ -672,7 +754,7 @@ class MotionPlanner():
         collision_obj.id = model_name
         mesh = Mesh()
         # load mesh file
-        mesh_file_name = "/root/ocrtoc_materials/models/"+model_name+"/collision_meshes/collision.obj"
+        mesh_file_name = "/root/ocrtoc_materials/models/" + model_name + "/collision_meshes/collision.obj"
 
         # use trimesh
         import trimesh
@@ -683,9 +765,9 @@ class MotionPlanner():
             mesh.triangles.append(triangle)
         for vertex in trimesh_mesh.vertices:
             point = Point()
-            point.x = vertex[0]*scale[0]
-            point.y = vertex[1]*scale[1]
-            point.z = vertex[2]*scale[2]
+            point.x = vertex[0] * scale[0]
+            point.y = vertex[1] * scale[1]
+            point.z = vertex[2] * scale[2]
             mesh.vertices.append(point)
 
         collision_obj.meshes = [mesh]
@@ -700,22 +782,22 @@ class MotionPlanner():
         # MoveIt also uses this from http://docs.ros.org/api/moveit_commander/html/planning__scene__interface_8py_source.html
         attached_obj = AttachedCollisionObject()
         attached_obj.link_name = "robotiq_2f_85_left_pad"
-        touch_links = ["robotiq_2f_85_left_pad", "robotiq_2f_85_right_pad", \
-                    "robotiq_2f_85_left_spring_link", "robotiq_2f_85_right_spring_link", \
-                    "robotiq_2f_85_left_follower", "robotiq_2f_85_right_follower", \
-                    "robotiq_2f_85_left_driver", "robotiq_2f_85_right_driver", \
-                    "robotiq_2f_85_left_coupler", "robotiq_2f_85_right_coupler", \
-                    "robotiq_arg2f_base_link", "robotiq_2f_85_base", \
-                    "robotiq_ur_coupler", "tool0", \
-                    "robotiq_arg2f_base_link", "realsense_camera_link", \
-                    "table"]
+        touch_links = [
+            "robotiq_2f_85_left_pad", "robotiq_2f_85_right_pad",
+            "robotiq_2f_85_left_spring_link", "robotiq_2f_85_right_spring_link",
+            "robotiq_2f_85_left_follower", "robotiq_2f_85_right_follower",
+            "robotiq_2f_85_left_driver", "robotiq_2f_85_right_driver",
+            "robotiq_2f_85_left_coupler", "robotiq_2f_85_right_coupler",
+            "robotiq_arg2f_base_link", "robotiq_2f_85_base", "robotiq_ur_coupler",
+            "tool0", "robotiq_arg2f_base_link", "realsense_camera_link", "table"
+        ]
         attached_obj.touch_links = touch_links
         # specify the attached object shape
         attached_obj_shape = CollisionObject()
         attached_obj_shape.id = model_name
         mesh = Mesh()
         # load mesh file
-        mesh_file_name = "/root/ocrtoc_materials/models/"+model_name+"/collision_meshes/collision.obj"
+        mesh_file_name = "/root/ocrtoc_materials/models/" + model_name + "/collision_meshes/collision.obj"
 
         # use trimesh
         import trimesh
@@ -726,9 +808,9 @@ class MotionPlanner():
             mesh.triangles.append(triangle)
         for vertex in trimesh_mesh.vertices:
             point = Point()
-            point.x = vertex[0]*scale[0]
-            point.y = vertex[1]*scale[1]
-            point.z = vertex[2]*scale[2]
+            point.x = vertex[0] * scale[0]
+            point.y = vertex[1] * scale[1]
+            point.z = vertex[2] * scale[2]
             mesh.vertices.append(point)
 
         # for box filtering (notice that this is unscaled)
@@ -741,6 +823,7 @@ class MotionPlanner():
 
         attached_obj.object = attached_obj_shape
         return attached_obj
+
     def attach_object_to_gripper(self, model_name, scale, obj_pose, grasp_state):
         return
         try:
@@ -751,45 +834,46 @@ class MotionPlanner():
 
         grasp_state.is_diff = True  # is different from others since we attached the object
 
-        rospy.sleep(1.0) # allow publisher to initialize
+        rospy.sleep(1.0)  # allow publisher to initialize
         return grasp_state
 
-    
     def set_collision_env_with_models(self, object_messages):
-        self.scene_interface.remove_world_object()
+        # print(self.workspace_component_names)
+        for obj_name in self.scene_interface.get_known_object_names():
+            # print(obj_name, type(obj_name))
+            if obj_name not in self.workspace_component_names:
+                self.scene_interface.remove_world_object(obj_name)
 
         for msg in object_messages:
+            # print('msg', msg)
             co = CollisionObject()
             co.id = msg.name
             co.header = msg.header
-
-            if msg.name in self.scene_interface.get_known_object_names():
-                co.operation = CollisionObject.MOVE
-                co.pose = msg.pose
-            else:
-                co.operation = CollisionObject.APPEND
-                if msg.type == PercievedObject.MESH:
-                    # print("MESH")
-                    co.meshes = [msg.mesh]
-                    co.mesh_poses = [msg.pose]
-                elif msg.type == PercievedObject.SOLID_PRIMITIVE:
-                    # print("SOLID")
-                    solid = SolidPrimitive()
-                    if msg.solid.type == SolidPrimitive.BOX:
-                        solid.type = SolidPrimitive.BOX
-                    elif msg.solid.type == SolidPrimitive.SPHERE:
-                        solid.type = SolidPrimitive.SPHERE
-                    elif msg.solid.type == SolidPrimitive.CYLINDER:
-                        solid.type = SolidPrimitive.CYLINDER
-                    else:
-                        return False
-                    solid.dimensions = list(msg.solid.dimensions).copy()
-                    co.primitives = [solid]
-                    co.primitive_poses = [msg.pose]
-                # elif msg.type == PercievedObject.POSE:
+            co.header.frame_id = 'base'
+            co.operation = CollisionObject.ADD
+            if msg.type == PercievedObject.MESH:
+                # print("MESH")
+                co.meshes = [msg.mesh]
+                co.mesh_poses = [msg.pose]
+            elif msg.type == PercievedObject.SOLID_PRIMITIVE:
+                # print("SOLID")
+                solid = SolidPrimitive()
+                if msg.solid.type == SolidPrimitive.BOX:
+                    solid.type = SolidPrimitive.BOX
+                elif msg.solid.type == SolidPrimitive.SPHERE:
+                    solid.type = SolidPrimitive.SPHERE
+                elif msg.solid.type == SolidPrimitive.CYLINDER:
+                    solid.type = SolidPrimitive.CYLINDER
                 else:
                     return False
+                solid.dimensions = list(msg.solid.dimensions)
+                co.primitives = [solid]
+                co.primitive_poses = [msg.pose]
+            # elif msg.type == PercievedObject.POSE:
+            else:
+                return False
 
-            self.scene_interface.add_object(co)
-            # self.co_pub.publish(co)
+            # self.scene_interface.add_object(co)
+            print('co', co)
+            self.co_pub.publish(co)
         return True

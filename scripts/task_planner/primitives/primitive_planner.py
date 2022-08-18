@@ -93,12 +93,11 @@ class PrimitivePlanner():
         print("Grasp Time: ", t1 - t0)
 
         ## Set Collision Space ##
-        obstacles = [1, 2, 3, 4, 5] + list(self.perception.filtered_occluded_dict.keys())
         obs_msgs = []
-        for obs_id in obstacles:
-            print(obs_id)
-            print(self.execution.object_state_msg[obs_id].name)
-            obs_msgs.append(self.execution.object_state_msg[obs_id])
+        for obs_id in self.perception.filtered_occluded_dict.keys():
+            # print(obs_id)
+            # print(self.execution.object_state_msg[str(obs_id)].name)
+            obs_msgs.append(self.execution.object_state_msg[str(obs_id)])
         self.motion_planner.set_collision_env_with_models(obs_msgs)
 
         ## Plan Pick ##
@@ -108,11 +107,11 @@ class PrimitivePlanner():
         #     cols = poseInfo['collisions']
 
         pick_joint_dict = robot.joint_vals_to_dict(filteredPoses[0]['dof_joints'])
-        # don't plan with right joints except for straight_line_motion
-        right_joint_dict = {}
+        # don't plan with left joints except for straight_line_motion
+        left_joint_dict = {}
         for key in list(pick_joint_dict):
-            if 'right' in key:
-                right_joint_dict[key] = pick_joint_dict.pop(key)
+            if 'left' in key:
+                left_joint_dict[key] = pick_joint_dict.pop(key)
 
         t0 = time.time()
         pick_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
@@ -123,7 +122,7 @@ class PrimitivePlanner():
 
         ## Plan Lift ##
         start_joint_dict = dict(pick_joint_dict_list[-1])
-        start_joint_dict.update(right_joint_dict)  # add back right joints
+        start_joint_dict.update(left_joint_dict)  # add back left joints
         pick_tip_pose = robot.get_tip_link_pose(start_joint_dict)
         lift_tip_pose = np.eye(4)
         lift_tip_pose[:3, 3] = np.array([0, 0, 0.05])  # lift up by 0.05

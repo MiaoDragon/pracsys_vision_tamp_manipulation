@@ -367,7 +367,7 @@ class Robot():
             physicsClientId=self.pybullet_id
         )
 
-        print("Get_ik", dof_joint_vals, rest_pose, len(rest_pose), len(self.jr))
+        # print("Get_ik", dof_joint_vals, rest_pose, len(rest_pose), len(self.jr))
         dof_joint_vals = self.standarize_joint_vals(dof_joint_vals)
         # print('after IK: ')
         # print(dof_joint_vals)

@@ -42,6 +42,7 @@ class ExecutionInterface():
             SolidPrimitive.CYLINDER: p.GEOM_CYLINDER,
             SolidPrimitive.SPHERE: p.GEOM_SPHERE,
         }
+        self.object_state_msg = {}
 
         # for updating information
         self.current_robot_state = self.scene.robot.joint_dict
@@ -257,6 +258,7 @@ class ExecutionInterface():
             self.attached_pose = None
 
     def update_object_state(self, msg: PercievedObject):
+        self.object_state_msg[msg.name] = msg
         position = [
             msg.pose.position.x,
             msg.pose.position.y,

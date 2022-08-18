@@ -12,6 +12,7 @@ import open3d as o3d
 # relayed functions
 grasp_pose_generation = pose_generation.grasp_pose_generation
 geometric_suction_grasp_pose_generation = pose_generation.geometric_suction_grasp_pose_generation
+geometric_gripper_grasp_pose_generation = pose_generation.geometric_gripper_grasp_pose_generation
 
 
 def generate_start_poses(

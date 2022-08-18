@@ -55,7 +55,7 @@ class PrimitivePlanner():
         print(list(self.perception.filtered_occluded_dict.keys()))
 
         t0 = time.time()
-        filteredPoses = obj_pose_generation.geometric_suction_grasp_pose_generation(
+        filteredPoses = obj_pose_generation.geometric_gripper_grasp_pose_generation(
             obj_local_id,
             robot,
             self.scene.workspace,
@@ -72,13 +72,13 @@ class PrimitivePlanner():
             # for iters in range(1000):
             #     robot.setMotors(sparse_pose)
             #     p.stepSimulation()
+            print(sparse_pose)
             robot.set_joints_without_memorize(sparse_pose)
             print(cols)
         input("Done...")
         robot.set_joints_without_memorize(robot.joint_vals)
 
     def pick(self, obj):
-        self.pipeline_sim()
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
         ## Grasp ##
@@ -87,18 +87,19 @@ class PrimitivePlanner():
             obj_local_id,
             robot,
             self.scene.workspace,
-            offset2=(0, 0, -0.05),
+            offset2=(0, 0, 0.05),
         )
         t1 = time.time()
         print("Grasp Time: ", t1 - t0)
 
         ## Set Collision Space ##
-        self.set_collision_env(
-            list(self.perception.filtered_occluded_dict.keys()),
-            [obj.obj_id],
-            [obj.obj_id],
-            padding=3,
-        )
+        obstacles = [1, 2, 3, 4, 5] + list(self.perception.filtered_occluded_dict.keys())
+        obs_msgs = []
+        for obs_id in obstacles:
+            print(obs_id)
+            print(self.execution.object_state_msg[obs_id].name)
+            obs_msgs.append(self.execution.object_state_msg[obs_id])
+        self.motion_planner.set_collision_env_with_models(obs_msgs)
 
         ## Plan Pick ##
         # for poseInfo in filteredPoses:

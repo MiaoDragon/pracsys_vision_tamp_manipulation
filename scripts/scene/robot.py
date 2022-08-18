@@ -6,9 +6,22 @@ import numpy as np
 import transformations as tf
 from urdfpy import URDF
 
+
 class Robot():
-    def __init__(self, urdf, pos, ori, lower_lim, upper_lim, joint_range, tip_link_name, suction_length, pybullet_id,
-                 active_joint_mask):
+
+    def __init__(
+        self,
+        urdf,
+        pos,
+        ori,
+        lower_lim,
+        upper_lim,
+        joint_range,
+        tip_link_name,
+        ee_params,
+        pybullet_id,
+        active_joint_mask,
+    ):
         """
         given the URDF file, the pose of the robot base, and the joint angles,
         initialize a robot model in the scene
@@ -20,7 +33,7 @@ class Robot():
             pos,
             ori,
             useFixedBase=True,
-            flags=p.URDF_USE_IMPLICIT_CYLINDER|p.URDF_INITIALIZE_SAT_FEATURES,
+            flags=p.URDF_USE_IMPLICIT_CYLINDER | p.URDF_INITIALIZE_SAT_FEATURES,
             physicsClientId=pybullet_id,
         )
         # get the number of active joints
@@ -60,7 +73,8 @@ class Robot():
         self.num_joints = num_joints
         self.joint_names = joint_names
         self.pybullet_id = pybullet_id
-        self.suction_length = suction_length
+        self.suction_length = ee_params
+        self.gripper_width = ee_params
 
         self.total_link_name_ind_dict = total_link_name_ind_dict
         self.total_joint_name_ind_dict = total_joint_name_ind_dict
@@ -73,7 +87,9 @@ class Robot():
         self.init_joint_dict = dict(joint_dict)
 
         self.init_joint_vals_np = np.array(list(joint_vals))
-        self.active_joint_mask = np.array(active_joint_mask).astype(bool)  # mask indicate which joint is active
+        self.active_joint_mask = np.array(active_joint_mask).astype(
+            bool
+        )  # mask indicate which joint is active
 
         self.lower_lim = np.array(lower_lim)
         self.upper_lim = np.array(upper_lim)
@@ -81,16 +97,14 @@ class Robot():
         self.sample_lower_lim = np.array(lower_lim)[:len(active_joint_mask)]
         self.sample_upper_lim = np.array(upper_lim)[:len(active_joint_mask)]
 
-
         self.jr = joint_range
 
         self.tip_link_name = tip_link_name
 
-        self.transform = tf.quaternion_matrix([ori[3],ori[0],ori[1],ori[2]])
-        self.transform[:3,3] = pos
+        self.transform = tf.quaternion_matrix([ori[3], ori[0], ori[1], ori[2]])
+        self.transform[:3, 3] = pos
 
         self.world_in_robot = np.linalg.inv(self.transform)
-
 
         # obtain the geometry information from URDF
         # store the pcd of each component, with transform relative to each link
@@ -123,11 +137,11 @@ class Robot():
                     # print('mesh vertices: ')
                     # print(mesh.vertices)
                     # mesh.sample()
-                    pcd = mesh.sample(len(mesh.vertices)*5)
+                    pcd = mesh.sample(len(mesh.vertices) * 5)
                     if collision.geometry.mesh is not None:
                         if collision.geometry.mesh.scale is not None:
                             pcd = pcd * collision.geometry.mesh.scale
-                    pcd = origin[:3,:3].dot(pcd.T).T + origin[:3,3]
+                    pcd = origin[:3, :3].dot(pcd.T).T + origin[:3, 3]
                     link_pcd.append(pcd)
             link_pcd = np.concatenate(link_pcd, axis=0)
             # print('link_pcd shape: ', link_pcd.shape)
@@ -138,8 +152,11 @@ class Robot():
 
         # setup attached object
         self.attached_obj_id = None
-        self.attached_obj_rel_pose = None # ee T obj
+        self.attached_obj_rel_pose = None  # ee T obj
 
+    def set_init_joints(self):
+        self.init_joint_vals = list(self.joint_vals)
+        self.init_joint_dict = dict(self.joint_dict)
 
     def attach(self, obj_id, obj_rel_pose):
         self.attached_obj_id = obj_id
@@ -171,11 +188,10 @@ class Robot():
                 # print('link name ', link_name, 'not in pcd_link_dict')
                 continue
             T = self.get_link_pose(link_name)
-            total_pcd.append(T[:3,:3].dot(self.pcd_link_dict[link_name].T).T + T[:3,3])
+            total_pcd.append(T[:3, :3].dot(self.pcd_link_dict[link_name].T).T + T[:3, 3])
         total_pcd = np.concatenate(total_pcd, axis=0)
         self.set_joints_without_memorize(self.joint_vals)
         return total_pcd
-
 
     def set_motion_planner(self, motion_planner):
         self.motion_planner = motion_planner
@@ -187,13 +203,16 @@ class Robot():
                 joint_idx = self.joint_indices[i]
                 joint_name = self.joint_names[i]
                 if joint_name in joints:
-                    p.resetJointState(self.robot_id, joint_idx, joints[joint_name], 0., self.pybullet_id)
+                    p.resetJointState(
+                        self.robot_id, joint_idx, joints[joint_name], 0., self.pybullet_id
+                    )
         else:
             # list or numpy array
             for i in range(len(self.joint_indices)):
                 joint_idx = self.joint_indices[i]
-                p.resetJointState(self.robot_id, joint_idx, joints[i], 0., self.pybullet_id)
-
+                p.resetJointState(
+                    self.robot_id, joint_idx, joints[i], 0., self.pybullet_id
+                )
 
     def set_joints(self, joints):
         for i in range(len(self.joint_indices)):
@@ -209,7 +228,9 @@ class Robot():
             joint_idx = self.joint_indices[i]
             joint_name = self.joint_names[i]
             if joint_name in joint_dict:
-                p.resetJointState(self.robot_id, joint_idx, joint_dict[joint_name], 0., self.pybullet_id)
+                p.resetJointState(
+                    self.robot_id, joint_idx, joint_dict[joint_name], 0., self.pybullet_id
+                )
                 joints.append(joint_dict[joint_name])
                 self.joint_dict[joint_name] = joint_dict[joint_name]
             else:
@@ -244,38 +265,37 @@ class Robot():
         """
         given joint val, convert them to [-pi,pi]
         """
-        joint_vals = [(joint_val+np.pi) % (2*np.pi) - np.pi for joint_val in joint_vals]
+        joint_vals = [
+            (joint_val + np.pi) % (2 * np.pi) - np.pi for joint_val in joint_vals
+        ]
         return joint_vals
 
     def get_link_pose(self, link_name):
         link_idx = self.total_link_name_ind_dict[link_name]
         link_state = p.getLinkState(bodyUniqueId=self.robot_id, linkIndex=link_idx)
         pos = link_state[4]
-        ori = link_state[5] # x y z w
+        ori = link_state[5]  # x y z w
         transform = tf.transformations.quaternion_matrix([ori[3], ori[0], ori[1], ori[2]])
-        transform[:3,3] = pos
+        transform[:3, 3] = pos
         return transform
-
 
     def get_tip_link_pose_urdfpy(self, joints=None):
         if joints is None:
             # checking with current joint
             joints = self.joint_dict
-        fk = self.urdfpy_robot.link_fk(cfg = joints)
+        fk = self.urdfpy_robot.link_fk(cfg=joints)
         return fk[self.link_dict[self.tip_link_name]]
         link_idx = self.total_link_name_ind_dict[self.tip_link_name]
         link_state = p.getLinkState(bodyUniqueId=self.robot_id, linkIndex=link_idx)
         pos = link_state[4]
-        ori = link_state[5] # x y z w
+        ori = link_state[5]  # x y z w
         transform = tf.transformations.quaternion_matrix([ori[3], ori[0], ori[1], ori[2]])
-        transform[:3,3] = pos
+        transform[:3, 3] = pos
 
         if joints is not None:
             # reset
             self.set_joints_without_memorize(self.joint_dict)
         return transform
-
-
 
     def get_tip_link_pose(self, joints=None):
         if joints is not None:
@@ -287,9 +307,9 @@ class Robot():
         link_idx = self.total_link_name_ind_dict[self.tip_link_name]
         link_state = p.getLinkState(bodyUniqueId=self.robot_id, linkIndex=link_idx)
         pos = link_state[4]
-        ori = link_state[5] # x y z w
+        ori = link_state[5]  # x y z w
         transform = tf.transformations.quaternion_matrix([ori[3], ori[0], ori[1], ori[2]])
-        transform[:3,3] = pos
+        transform[:3, 3] = pos
 
         if joints is not None:
             # reset
@@ -303,38 +323,51 @@ class Robot():
         link_idx = self.total_link_name_ind_dict[self.tip_link_name]
         link_state = p.getLinkState(bodyUniqueId=self.robot_id, linkIndex=link_idx)
         pos = np.array(link_state[4])
-        ori = link_state[5] # x y z w
-        ori = np.array([ori[3],ori[0],ori[1],ori[2]])  # w x y z
+        ori = link_state[5]  # x y z w
+        ori = np.array([ori[3], ori[0], ori[1], ori[2]])  # w x y z
 
         if joints is not None:
             # reset
             self.set_joints_without_memorize(self.joint_dict)
         return pos, ori
 
-
-
     def set_suction_length(self, suction_length=0.3015):
         self.suction_length = suction_length
 
-    def get_ik(self, link_name, position, orientation, rest_pose,
-               lower_lim=None, upper_lim=None, jr=None,
-               collision_check=False, workspace=None, visualize=False):
+    def get_ik(
+        self,
+        link_name,
+        position,
+        orientation,
+        rest_pose,
+        lower_lim=None,
+        upper_lim=None,
+        jr=None,
+        collision_check=False,
+        workspace=None,
+        visualize=False
+    ):
         if lower_lim is None:
             lower_lim = self.lower_lim
         if upper_lim is None:
             upper_lim = self.upper_lim
         if jr is None:
             jr = self.jr
-        dof_joint_vals = p.calculateInverseKinematics(bodyUniqueId=self.robot_id,
-                                endEffectorLinkIndex=self.total_link_name_ind_dict[link_name],
-                                targetPosition=position,
-                                targetOrientation=orientation,
-                                lowerLimits=lower_lim, upperLimits=upper_lim,
-                                jointRanges=jr,
-                                restPoses=rest_pose[:len(self.jr)],
-                                maxNumIterations=2000, residualThreshold=0.001,
-                                physicsClientId=self.pybullet_id)
+        dof_joint_vals = p.calculateInverseKinematics(
+            bodyUniqueId=self.robot_id,
+            endEffectorLinkIndex=self.total_link_name_ind_dict[link_name],
+            targetPosition=position,
+            targetOrientation=orientation,
+            lowerLimits=lower_lim,
+            upperLimits=upper_lim,
+            jointRanges=jr,
+            restPoses=rest_pose[:len(self.jr)],
+            maxNumIterations=2000,
+            residualThreshold=0.001,
+            physicsClientId=self.pybullet_id
+        )
 
+        print("Get_ik", dof_joint_vals, rest_pose, len(rest_pose), len(self.jr))
         dof_joint_vals = self.standarize_joint_vals(dof_joint_vals)
         # print('after IK: ')
         # print(dof_joint_vals)
@@ -346,8 +379,8 @@ class Robot():
         # print('dof_joint_vals < self.lower_lim: ', dof_joint_vals < self.lower_lim)
         # print('sum: ', (dof_joint_vals < self.lower_lim).sum())
 
-
-        if (dof_joint_vals > upper_lim[:len(dof_joint_vals)]).sum()>0 or (dof_joint_vals<lower_lim[:len(dof_joint_vals)]).sum()>0:
+        if (dof_joint_vals > upper_lim[:len(dof_joint_vals)]).sum() > 0 or \
+                (dof_joint_vals < lower_lim[:len(dof_joint_vals)]).sum() > 0:
             # print('IK joint out of limit')
             # print('ik found: ')
             # print(dof_joint_vals)
@@ -362,18 +395,21 @@ class Robot():
         if collision_check:
             joint_dict = self.joint_vals_to_dict(dof_joint_vals)
             robot_state = self.motion_planner.get_robot_state_from_joint_dict(joint_dict)
-            result = self.motion_planner.get_state_validity(robot_state, group_name="robot_arm")
+            result = self.motion_planner.get_state_validity(
+                robot_state, group_name="right_arm"
+            )
             if not result.valid:
                 # print('state_validity failed')
                 valid = False
                 # show the result
                 if visualize:
-                    self.motion_planner.display_robot_state(robot_state, group_name='robot_arm')
+                    self.motion_planner.display_robot_state(
+                        robot_state, group_name='right_arm'
+                    )
                     input('show next...')
                     # self.set_joints_without_memorize(joint_dict)
                     # input('show next...')
                     # self.set_joints_without_memorize(self.joint_vals)
-
 
             # result = self.robot_in_collision(dof_joint_vals, workspace)
             # if result:
@@ -384,13 +420,13 @@ class Robot():
         # compare two angles in quat
         # take the shorter angle: when the dot product < 0, the angle lies in [pi,2pi]
         # note that this is taken care of by the conditional code
-        ang_dist = np.dot(q1/np.linalg.norm(q1),q2/np.linalg.norm(q2))
+        ang_dist = np.dot(q1 / np.linalg.norm(q1), q2 / np.linalg.norm(q2))
         # clipping so the dot product is valid
         ang_dist = min(ang_dist, 1.0)
         ang_dist = max(ang_dist, -1.0)
-        theta = 2*np.arccos(ang_dist)
+        theta = 2 * np.arccos(ang_dist)
         if theta > np.pi:
-            theta = theta - 2*np.pi
+            theta = theta - 2 * np.pi
         # theta[theta>np.pi] = theta[theta>np.pi] - 2*np.pi
         return np.abs(theta)
 
@@ -405,8 +441,12 @@ class Robot():
 
         for i in range(len(self.joint_indices)):
             joint_idx = self.joint_indices[i]
-            p.resetJointState(bodyUniqueId=self.robot_id, jointIndex=joint_idx, targetValue=dof_joint_vals[i],
-                              physicsClientId=self.pybullet_id)
+            p.resetJointState(
+                bodyUniqueId=self.robot_id,
+                jointIndex=joint_idx,
+                targetValue=dof_joint_vals[i],
+                physicsClientId=self.pybullet_id
+            )
 
         # check the pose of the link
         link_idx = self.total_link_name_ind_dict[link_name]
@@ -419,7 +459,8 @@ class Robot():
         # print(dof_joint_vals)
         valid = False
 
-        if (np.linalg.norm(np.array(pos)-np.array(position)) <= pos_threshold) and (self.quat_distance(np.array(ori), np.array(orientation)) <= ori_threshold):
+        if (np.linalg.norm(np.array(pos) - np.array(position)) <= pos_threshold) and \
+                (self.quat_distance(np.array(ori), np.array(orientation)) <= ori_threshold):
             valid = True
             return valid
 
@@ -431,10 +472,17 @@ class Robot():
             if visualize:
                 print('target pos: ', position, ' target orientation: ', orientation)
                 print('FK pos: ', pos, ' FK ori: ', ori)
-                print('orientation distance: ', self.quat_distance(np.array(ori), np.array(orientation)))
+                print(
+                    'orientation distance: ',
+                    self.quat_distance(np.array(ori), np.array(orientation))
+                )
                 joint_dict = self.joint_vals_to_dict(dof_joint_vals)
-                robot_state = self.motion_planner.get_robot_state_from_joint_dict(joint_dict)
-                self.motion_planner.display_robot_state(robot_state, group_name='robot_arm')
+                robot_state = self.motion_planner.get_robot_state_from_joint_dict(
+                    joint_dict
+                )
+                self.motion_planner.display_robot_state(
+                    robot_state, group_name='right_arm'
+                )
 
                 input("checking ik")
 
@@ -453,7 +501,9 @@ class Robot():
 
         collision = False
         for comp_name, comp_id in workspace.component_id_dict.items():
-            contacts = p.getClosestPoints(self.robot_id, comp_id, distance=0.,physicsClientId=self.pybullet_id)
+            contacts = p.getClosestPoints(
+                self.robot_id, comp_id, distance=0., physicsClientId=self.pybullet_id
+            )
             if len(contacts):
                 collision = True
                 self.set_joints_without_memorize(self.joint_vals)

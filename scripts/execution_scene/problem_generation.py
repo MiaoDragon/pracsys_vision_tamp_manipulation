@@ -63,18 +63,24 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
         [0.8, 0.8757, 0.8757, 0.81, 0.8757, 0.8757]
 
     robot = Robot(
-        urdf_path, scene_dict['robot']['pose']['pos'], scene_dict['robot']['pose']['ori'],
-        ll, ul, jr, 'motoman_left_ee', 0.3015, pid,
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
+        urdf_path,
+        scene_dict['robot']['pose']['pos'],
+        scene_dict['robot']['pose']['ori'],
+        ll,
+        ul,
+        jr,
+        'motoman_right_ee',
+        # 0.3015, # suction distance
+        0.044,  # gripper width
+        pid,
+        [1] + [0] * 7 + [1] * 7,
     )
 
-
-    joints = [0,
-            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
-            ]
+    joints = [0]
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # left
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # right
     robot.set_joints(joints)
+    robot.set_init_joints()
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -336,17 +342,24 @@ def random_one_problem(scene, level, num_objs, num_hiding_objs, safety_padding=0
         [0.8, 0.8757, 0.8757, 0.81, 0.8757, 0.8757]
 
     robot = Robot(
-        urdf_path, scene_dict['robot']['pose']['pos'], scene_dict['robot']['pose']['ori'],
-        ll, ul, jr, 'motoman_left_ee', 0.3015, pid,
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
+        urdf_path,
+        scene_dict['robot']['pose']['pos'],
+        scene_dict['robot']['pose']['ori'],
+        ll,
+        ul,
+        jr,
+        'motoman_right_ee',
+        # 0.3015, # suction distance
+        0.044,  # gripper width
+        pid,
+        [1] + [0] * 7 + [1] * 7,
     )
 
-    joints = [0,
-            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
-            ]
+    joints = [0]
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # left
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # right
     robot.set_joints(joints)
+    robot.set_init_joints()
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -659,17 +672,24 @@ def load_problem(
         [0.8, 0.8757, 0.8757, 0.81, 0.8757, 0.8757]
 
     robot = Robot(
-        urdf_path, scene_dict['robot']['pose']['pos'], scene_dict['robot']['pose']['ori'],
-        ll, ul, jr, 'motoman_left_ee', 0.3015, pid,
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
+        urdf_path,
+        scene_dict['robot']['pose']['pos'],
+        scene_dict['robot']['pose']['ori'],
+        ll,
+        ul,
+        jr,
+        'motoman_right_ee',
+        # 0.3015, # suction distance
+        0.044,  # gripper width
+        pid,
+        [1] + [0] * 7 + [1] * 7,
     )
 
-    joints = [0,
-            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
-            ]
+    joints = [0]
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # left
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # right
     robot.set_joints(joints)
+    robot.set_init_joints()
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -785,17 +805,24 @@ def random_one_problem_level(
         [0.8, 0.8757, 0.8757, 0.81, 0.8757, 0.8757]
 
     robot = Robot(
-        urdf_path, scene_dict['robot']['pose']['pos'], scene_dict['robot']['pose']['ori'],
-        ll, ul, jr, 'motoman_left_ee', 0.3015, pid,
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
+        urdf_path,
+        scene_dict['robot']['pose']['pos'],
+        scene_dict['robot']['pose']['ori'],
+        ll,
+        ul,
+        jr,
+        'motoman_right_ee',
+        # 0.3015, # suction distance
+        0.044,  # gripper width
+        pid,
+        [1] + [0] * 7 + [1] * 7,
     )
 
-    joints = [0,
-            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
-            ]
+    joints = [0]
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # left
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # right
     robot.set_joints(joints)
+    robot.set_init_joints()
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -1149,17 +1176,24 @@ def load_problem_level(
         [0.8, 0.8757, 0.8757, 0.81, 0.8757, 0.8757]
 
     robot = Robot(
-        urdf_path, scene_dict['robot']['pose']['pos'], scene_dict['robot']['pose']['ori'],
-        ll, ul, jr, 'motoman_left_ee', 0.3015, pid,
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
+        urdf_path,
+        scene_dict['robot']['pose']['pos'],
+        scene_dict['robot']['pose']['ori'],
+        ll,
+        ul,
+        jr,
+        'motoman_right_ee',
+        # 0.3015, # suction distance
+        0.044,  # gripper width
+        pid,
+        [1] + [0] * 7 + [1] * 7,
     )
 
-    joints = [0,
-            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
-            ]
+    joints = [0]
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # left
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # right
     robot.set_joints(joints)
+    robot.set_init_joints()
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -1268,17 +1302,24 @@ def random_one_problem_ycb(scene, level, num_objs, num_hiding_objs, safety_paddi
         [0.8, 0.8757, 0.8757, 0.81, 0.8757, 0.8757]
 
     robot = Robot(
-        urdf_path, scene_dict['robot']['pose']['pos'], scene_dict['robot']['pose']['ori'],
-        ll, ul, jr, 'motoman_left_ee', 0.3015, pid,
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
+        urdf_path,
+        scene_dict['robot']['pose']['pos'],
+        scene_dict['robot']['pose']['ori'],
+        ll,
+        ul,
+        jr,
+        'motoman_right_ee',
+        # 0.3015, # suction distance
+        0.044,  # gripper width
+        pid,
+        [1] + [0] * 7 + [1] * 7,
     )
 
-    joints = [0,
-            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
-            ]
+    joints = [0],
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # left
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # right
     robot.set_joints(joints)
+    robot.set_init_joints()
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']
@@ -1637,17 +1678,24 @@ def load_problem_ycb(scene, obj_poses, obj_shapes, target_pose, target_obj_shape
         [0.8, 0.8757, 0.8757, 0.81, 0.8757, 0.8757]
 
     robot = Robot(
-        urdf_path, scene_dict['robot']['pose']['pos'], scene_dict['robot']['pose']['ori'],
-        ll, ul, jr, 'motoman_left_ee', 0.3015, pid,
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
+        urdf_path,
+        scene_dict['robot']['pose']['pos'],
+        scene_dict['robot']['pose']['ori'],
+        ll,
+        ul,
+        jr,
+        'motoman_right_ee',
+        # 0.3015, # suction distance
+        0.044,  # gripper width
+        pid,
+        [1] + [0] * 7 + [1] * 7,
     )
 
-    joints = [0,
-            # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ,0.0,  # left (suction)
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # left
-            1.75, 0.8, 0.0, -0.66, 0.0, 0.0 ,0.0,  # right
-            ]
+    joints = [0],
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # left
+    joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # right
     robot.set_joints(joints)
+    robot.set_init_joints()
 
     workspace_low = scene_dict['workspace']['region_low']
     workspace_high = scene_dict['workspace']['region_high']

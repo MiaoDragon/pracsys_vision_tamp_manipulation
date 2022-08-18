@@ -40,7 +40,8 @@ class MotionPlanner():
         # set up the scene
         moveit_commander.roscpp_initialize(commander_args)
         self.robot_commander = moveit_commander.RobotCommander()
-        self.group_arm_name = "left_arm"
+        # self.group_arm_name = "left_arm"
+        self.group_arm_name = "right_arm"
         self.move_group = moveit_commander.MoveGroupCommander(self.group_arm_name)
         self.scene_interface = moveit_commander.PlanningSceneInterface()
 
@@ -309,7 +310,7 @@ class MotionPlanner():
         mesh_vertices, mesh_faces = self.create_mesh_from_voxel(obj.get_conservative_model(), obj)
         co = self.add_mesh_from_vertices_and_faces(mesh_vertices, mesh_faces, obj_transform, 'suction_object')
         # attach the added mesh to robot link
-        touch_links = ['motoman_left_ee', 'arm_left_link_tool0', 'motoman_left_hand']
+        touch_links = ['motoman_right_ee', 'arm_right_link_tool0', 'motoman_right_hand']
         aco = self.attach_object(co, robot.tip_link_name, touch_links)
         # self.move_group.attach_object('suction_object', robot.tip_link_name)
         # rospy.sleep(1.0)
@@ -353,7 +354,7 @@ class MotionPlanner():
         # joint_state.header = Header()
         # joint_state.header.stamp = rospy.Time.now()
         names = list(filter(
-            lambda x:'right' not in x,
+            lambda x:'left' not in x,
             start_joint_dict.keys()
         ))
         vals = []
@@ -370,7 +371,7 @@ class MotionPlanner():
         # make sure the goal is only the ones in the group
         new_goal_joint_dict = {}
         for name, val in goal_joint_dict.items():
-            if 'right' in name:
+            if 'left' in name:
                 continue
             new_goal_joint_dict[name] = val
         goal_joint_dict = new_goal_joint_dict
@@ -387,7 +388,7 @@ class MotionPlanner():
 
         # self.move_group.set_planner_id('PersistentLazyPRM')
 
-        self.move_group.set_planner_id('BiTRRT')
+        # self.move_group.set_planner_id('BiTRRT')
         self.move_group.set_start_state(moveit_robot_state)
         
         self.move_group.set_joint_value_target(goal_joint_dict)
@@ -414,7 +415,7 @@ class MotionPlanner():
         move_vec = relative_tip_pose[:3,3]
         pose_dist = np.linalg.norm(move_vec)
         move_vec = move_vec / pose_dist
-        step = 0.01
+        step = 0.005
         n_step = int(np.ceil(pose_dist / step))
         step = pose_dist / n_step
 
@@ -475,7 +476,7 @@ class MotionPlanner():
         rospy.sleep(1.0)
 
 
-    def get_state_validity(self, state, group_name="robot_arm"):
+    def get_state_validity(self, state, group_name="right_arm"):
         rospy.wait_for_service('/check_state_validity')
         sv_srv = rospy.ServiceProxy('/check_state_validity', GetStateValidity)
         gsvr = GetStateValidityRequest()
@@ -491,7 +492,7 @@ class MotionPlanner():
         return result
 
 
-    def collision_check(self, state, model_name, group_name="robot_arm"):
+    def collision_check(self, state, model_name, group_name="right_arm"):
         res = self.get_state_validity(state)
         if res.valid:
             return True
@@ -752,3 +753,43 @@ class MotionPlanner():
 
         rospy.sleep(1.0) # allow publisher to initialize
         return grasp_state
+
+    
+    def set_collision_env_with_models(self, object_messages):
+        self.scene_interface.remove_world_object()
+
+        for msg in object_messages:
+            co = CollisionObject()
+            co.id = msg.name
+            co.header = msg.header
+
+            if msg.name in self.scene_interface.get_known_object_names():
+                co.operation = CollisionObject.MOVE
+                co.pose = msg.pose
+            else:
+                co.operation = CollisionObject.APPEND
+                if msg.type == PercievedObject.MESH:
+                    # print("MESH")
+                    co.meshes = [msg.mesh]
+                    co.mesh_poses = [msg.pose]
+                elif msg.type == PercievedObject.SOLID_PRIMITIVE:
+                    # print("SOLID")
+                    solid = SolidPrimitive()
+                    if msg.solid.type == SolidPrimitive.BOX:
+                        solid.type = SolidPrimitive.BOX
+                    elif msg.solid.type == SolidPrimitive.SPHERE:
+                        solid.type = SolidPrimitive.SPHERE
+                    elif msg.solid.type == SolidPrimitive.CYLINDER:
+                        solid.type = SolidPrimitive.CYLINDER
+                    else:
+                        return False
+                    solid.dimensions = list(msg.solid.dimensions).copy()
+                    co.primitives = [solid]
+                    co.primitive_poses = [msg.pose]
+                # elif msg.type == PercievedObject.POSE:
+                else:
+                    return False
+
+            self.scene_interface.add_object(co)
+            # self.co_pub.publish(co)
+        return True

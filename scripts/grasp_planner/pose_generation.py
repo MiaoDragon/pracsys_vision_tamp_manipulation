@@ -219,7 +219,8 @@ def geometric_suction_grasp_pose_generation(
 
 
 def geometric_gripper_grasp_pose_generation(
-    obj,
+    # obj,
+    object_id,
     robot,
     workspace,
     offset1=(0, 0, 0.0),
@@ -236,15 +237,16 @@ def geometric_gripper_grasp_pose_generation(
     """
 
     # the following is just for autocompletion
-    from perception.object_belief import ObjectBelief
-    from scene.workspace import Workspace
-    from scene.robot import Robot
-    obj = ObjectBelief()
-    robot = Robot()
-    workspace = Workspace()
+    if 0:
+        from perception.object_belief import ObjectBelief
+        from scene.workspace import Workspace
+        from scene.robot import Robot
+        obj = ObjectBelief()
+        robot = Robot()
+        workspace = Workspace()
     # comment out above during execution
 
-    object_id = obj.obj_id
+    # object_id = obj.obj_id
     pybullet_id = robot.pybullet_id
 
     shape = p.getCollisionShapeData(object_id, -1, pybullet_id)[0]
@@ -272,7 +274,7 @@ def geometric_gripper_grasp_pose_generation(
     # object position and orientation
     obj_pos, obj_rot = p.getBasePositionAndOrientation(object_id, pybullet_id)
     # obj_pos_in, obj_rot_in = p.invertTransform(obj_pos, obj_rot)
-    gw = robot.right_flim[1] * 2  # gripper width
+    gw = robot.gripper_width  # gripper width
 
     def nearOdd(n):
         return round((n - 1) / 2) * 2 + 1
@@ -288,22 +290,26 @@ def geometric_gripper_grasp_pose_generation(
         # front = [-sx / 2, 0, 0]
         if sx < gw:
             noz = nearOdd(sz / (gw * 1.5))
-            for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
+            # for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
+            for z in np.linspace(-0.1, 0.3, res):
                 grasps.append([[0, sy / 2, z * sz], horz[3]])  # right
                 grasps.append([[0, sy / 2, z * sz], horz[9]])  # right
                 grasps.append([[0, -sy / 2, z * sz], horz[5]])  # left
                 grasps.append([[0, -sy / 2, z * sz], horz[11]])  # left
             noy = nearOdd(sy / gw)
-            for y in np.linspace(-(noy - 1) / (2 * noy), (noy - 1) / (2 * noy), noy):
+            # for y in np.linspace(-(noy - 1) / (2 * noy), (noy - 1) / (2 * noy), noy):
+            for y in np.linspace(-0.2, 0.2, res):
                 grasps.append([[0, y * sy, sz / 2], vert[1]])  # top
                 grasps.append([[0, y * sy, sz / 2], vert[3]])  # top
         if sy < gw:
             noz = nearOdd(sz / gw)
-            for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
+            # for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
+            for z in np.linspace(-0.1, 0.3, res):
                 grasps.append([[-sx / 2, 0, z * sz], horz[4]])  # front
                 grasps.append([[-sx / 2, 0, z * sz], horz[10]])  # front
             nox = nearOdd(sx / gw)
-            for x in np.linspace(-(nox - 1) / (2 * nox), (nox - 1) / (2 * nox), nox):
+            # for x in np.linspace(-(nox - 1) / (2 * nox), (nox - 1) / (2 * nox), nox):
+            for x in np.linspace(-0.2, 0.2, res):
                 grasps.append([[x * sx, 0, sz / 2], vert[0]])  # top
                 grasps.append([[x * sx, 0, sz / 2], vert[2]])  # top
 
@@ -311,8 +317,10 @@ def geometric_gripper_grasp_pose_generation(
     elif shape[2] == p.GEOM_CYLINDER or shape[2] == p.GEOM_CAPSULE:
         h, r = shape[3][:2]
         noz = nearOdd(h / (gw))
-        for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
+        # for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
+        for z in np.linspace(0.0, 0.3, hres):
             grasps += [[(0, 0, z * h), o] for o in vert]
+        for z in np.linspace(-0.1, 0.3, hres):
             grasps += [
                 [(0, 0, z * h), o]
                 for o in horz[hres * ((res - 1) // 4):hres * ((res + 3) // 4)]
@@ -364,7 +372,7 @@ def geometric_gripper_grasp_pose_generation(
         pos2, rot2 = pose2
         # self.set_joints(self.nuetral_joints)
         robot.set_joints_without_memorize(robot.init_joint_vals)
-        # jointPoses, dist = self.accurateIK(
+        # jointPoses, dist = robot.accurateIK(
         valid, jointPoses = robot.get_ik(
             endEffectorId,
             pos1,
@@ -375,11 +383,10 @@ def geometric_gripper_grasp_pose_generation(
         # input(rot1)
         # if dist < filterThreshold:  # filter by succesful IK
         if valid:
-            robot.set_gripper(endEffectorId, 'open', reset=True)
+            # robot.set_gripper(endEffectorId, 'open', reset=True)
             joint_states = [
                 x[0] for x in p.getJointStates(robot.robot_id, range(robot.num_joints))
             ]
-            # filteredJointPoses.append(jointPoses)
             ignore_ids = collision_ignored + [robot.robot_id]
             collisions = set()
             for i in range(p.getNumBodies(physicsClientId=pybullet_id)):
@@ -394,7 +401,8 @@ def geometric_gripper_grasp_pose_generation(
                 )
                 if len(contacts):
                     collisions.add(obj_pid)
-            if 1 not in collisions:  # dont add if collides with table
+            # dont add if collides with shelf
+            if not collisions.intersection([1, 2, 3, 4, 5]):
                 filteredJointPoses.append(
                     {
                         'all_joints': joint_states,
@@ -402,7 +410,7 @@ def geometric_gripper_grasp_pose_generation(
                         'eof_pose': list(pos1) + list(rot1),
                         'eof_pose_offset': list(pos2) + list(rot2),
                         'collisions': collisions,
-                        'dist': dist
+                        # 'dist': dist
                     }
                 )
 
@@ -411,7 +419,10 @@ def geometric_gripper_grasp_pose_generation(
 
     # return pose and collisions in sorted order
     filteredJointPoses = sorted(
-        filteredJointPoses, key=lambda x: (len(x['collisions']), x['dist'])
+        # filteredJointPoses,
+        # key=lambda x: (len(x['collisions']), x['dist']),
+        filteredJointPoses,
+        key=lambda x: len(x['collisions'])
     )
     return filteredJointPoses
 

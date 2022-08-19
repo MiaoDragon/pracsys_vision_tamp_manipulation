@@ -83,7 +83,7 @@ class PrimitivePlanner():
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
         ## Grasp ##
         t0 = time.time()
-        filteredPoses = obj_pose_generation.geometric_suction_grasp_pose_generation(
+        filteredPoses = obj_pose_generation.geometric_gripper_grasp_pose_generation(
             obj_local_id,
             robot,
             self.scene.workspace,
@@ -91,6 +91,16 @@ class PrimitivePlanner():
         )
         t1 = time.time()
         print("Grasp Time: ", t1 - t0)
+
+        # pick poses
+        # for poseInfo in filteredPoses:
+        #     pose = poseInfo['all_joints']
+        #     sparse_pose = poseInfo['dof_joints']
+        #     cols = poseInfo['collisions']
+        pick_joint_dict = robot.joint_vals_to_dict(filteredPoses[0]['dof_joints_offset'])
+        eof_poses = [
+            x['eof_pose_offset'] for x in filteredPoses if len(x['collisions']) == 0
+        ]
 
         ## Set Collision Space ##
         obs_msgs = []
@@ -101,28 +111,24 @@ class PrimitivePlanner():
         self.motion_planner.set_collision_env_with_models(obs_msgs)
 
         ## Plan Pick ##
-        # for poseInfo in filteredPoses:
-        #     pose = poseInfo['all_joints']
-        #     sparse_pose = poseInfo['dof_joints']
-        #     cols = poseInfo['collisions']
-
-        pick_joint_dict = robot.joint_vals_to_dict(filteredPoses[0]['dof_joints'])
-        # don't plan with left joints except for straight_line_motion
-        left_joint_dict = {}
-        for key in list(pick_joint_dict):
-            if 'left' in key:
-                left_joint_dict[key] = pick_joint_dict.pop(key)
-
         t0 = time.time()
-        pick_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
+        # pick_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
+        #     robot.joint_dict,
+        #     pick_joint_dict,
+        #     robot,
+        # )
+        pick_joint_dict_list = self.motion_planner.ee_approach_plan(
             robot.joint_dict,
+            # eof_poses,
             pick_joint_dict,
-            robot,
+            disp_dist=0.05,
+            disp_dir=(0, 0, 1),
+            is_pre_dir_abs=False,
+            attached_acos=[],
         )
 
         ## Plan Lift ##
         start_joint_dict = dict(pick_joint_dict_list[-1])
-        start_joint_dict.update(left_joint_dict)  # add back left joints
         pick_tip_pose = robot.get_tip_link_pose(start_joint_dict)
         lift_tip_pose = np.eye(4)
         lift_tip_pose[:3, 3] = np.array([0, 0, 0.05])  # lift up by 0.05
@@ -136,15 +142,15 @@ class PrimitivePlanner():
             workspace=self.scene.workspace,
             display=False
         )
+        # lift_joint_dict_list = self.motion_planner.straight_line_motion2(
+        #     start_joint_dict,
+        #     magnitude=0.05
+        # )
         t1 = time.time()
         print("Plan Time: ", t1 - t0)
 
         ## Execute ##
-        self.execution.execute_traj(
-            pick_joint_dict_list,
-            obj.pybullet_id,
-            duration=0.3,
-        )
+        self.execution.execute_traj(pick_joint_dict_list)
         self.execution.attach_obj(obj.obj_id)
         self.execution.execute_traj(lift_joint_dict_list)
         self.execution.detach_obj()

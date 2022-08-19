@@ -9,6 +9,7 @@ import psutil
 import objgraph
 import numpy as np
 import open3d as o3d
+from math import pi, tau, dist
 from memory_profiler import profile
 
 import rospy
@@ -28,6 +29,7 @@ from std_srvs.srv import Empty
 from moveit_msgs.srv import GetStateValidityRequest, GetStateValidity
 
 from utils.visual_utils import *
+from utils.transform_utils import *
 from pracsys_vision_tamp_manipulation.msg import PercievedObject
 
 
@@ -192,11 +194,16 @@ class MotionPlanner():
         # objgraph.show_most_common_types(limit=20)
         # objgraph.show_growth(limit=3)
 
-    def get_robot_state_from_joint_dict(self, joint_dict, attached_acos=[]):
+    def get_robot_state_from_joint_dict(
+        self,
+        joint_dict,
+        attached_acos=[],
+        ignore_func=lambda x: 'left' not in x,
+    ):
         joint_state = JointState()
         # joint_state.header = Header()
         # joint_state.header.stamp = rospy.Time.now()
-        names = list(joint_dict.keys())
+        names = list(filter(ignore_func, joint_dict.keys()))
         vals = []
         for i in range(len(names)):
             vals.append(joint_dict[names[i]])
@@ -243,6 +250,79 @@ class MotionPlanner():
                 joint_dict[joint_names[j]] = joint_vals[i][j]
             joint_dict_list.append(joint_dict)
         return joint_dict_list
+
+    def motion_plan_poses(self, start_joint_dict, target_poses, attached_acos=[]):
+        ## set initial state ##
+        # self.move_group.set_start_state(
+        #     self.get_robot_state_from_joint_dict(start_joint_dict)
+        # )
+
+        ## set planning params ##
+        self.move_group.set_planner_id('BiTRRT')
+        self.move_group.set_planning_time(15)
+        self.move_group.set_num_planning_attempts(25)
+        self.move_group.allow_replanning(False)
+
+        ## plan pose ##
+        self.move_group.clear_pose_targets()
+        self.move_group.set_pose_targets(target_poses)
+        # success, raw_plan, planning_time, error_code = move_group.plan()
+        plan = self.move_group.plan()
+        self.move_group.clear_pose_targets()
+
+        return plan
+
+    def pose_motion_plan(self, start_joint_dict, target_poses, attached_acos=[]):
+        plan = self.motion_plan_poses(start_joint_dict, target_poses, attached_acos)
+        joint_names, positions, _ = self.extract_plan_to_joint_list(plan)
+        joint_dict_list = self.format_joint_name_val_dict(joint_names, positions)
+        return joint_dict_list
+
+    def ee_approach_plan(
+        self,
+        start_joint_dict,
+        target,
+        disp_dist=0.05,
+        disp_dir=(0, 0, 1),
+        is_pre_dir_abs=False,
+        attached_acos=[],
+    ):
+
+        ## plan to pre pose ##
+        # plan_dict_list1 = self.pose_motion_plan(
+        #     start_joint_dict, target, attached_acos
+        # )
+        plan_dict_list1 = self.joint_dict_motion_plan(
+            start_joint_dict, target, attached_acos=attached_acos
+        )
+
+        if not plan_dict_list1:
+            return []
+
+        ## plan straight line approach ##
+        # start from pre pose
+        new_start_joint_dict = dict(plan_dict_list1[-1])
+        start_tip_pose = self.robot.get_tip_link_pose(new_start_joint_dict)
+
+        # compute displacement
+        normalizer = disp_dist / dist(disp_dir, (0, 0, 0))
+        translation = translation_matrix(normalizer * np.array(disp_dir))
+        current_pose = np.eye(4) if is_pre_dir_abs else copy.deepcopy(start_tip_pose)
+        diff_tip_pose = concatenate_matrices(current_pose, translation)
+        print(diff_tip_pose)
+
+        # plan straight line
+        plan_dict_list2 = self.straight_line_motion(
+            new_start_joint_dict,
+            start_tip_pose,
+            diff_tip_pose,
+            self.robot,
+            collision_check=False,
+            workspace=self.workspace,
+            display=False
+        )
+
+        return plan_dict_list1 + plan_dict_list2
 
     def suction_plan(
         self,
@@ -401,8 +481,16 @@ class MotionPlanner():
 
         return suction_joint_dict_list
 
-    def joint_dict_motion_plan(self, start_joint_dict, goal_joint_dict, robot):
-        plan = self.motion_plan_joint(start_joint_dict, goal_joint_dict, robot, [])
+    def joint_dict_motion_plan(
+        self,
+        start_joint_dict,
+        goal_joint_dict,
+        robot=None,
+        attached_acos=[],
+    ):
+        plan = self.motion_plan_joint(
+            start_joint_dict, goal_joint_dict, robot, attached_acos
+        )
         joint_names, positions, _ = self.extract_plan_to_joint_list(plan)
         joint_dict_list = self.format_joint_name_val_dict(joint_names, positions)
         return joint_dict_list
@@ -411,7 +499,7 @@ class MotionPlanner():
         self,
         start_joint_dict,
         goal_joint_dict,
-        robot,
+        robot=None,
         attached_acos=[],
     ):
 
@@ -466,6 +554,43 @@ class MotionPlanner():
 
         return plan
 
+    def straight_line_motion2(
+        self,
+        start_joint_dict,
+        direction=(0, 0, 1),
+        magnitude=1,
+        eef_step=0.005,
+        jump_threshold=0.0,
+        avoid_collisions=True,
+    ):
+        ## set initial state ##
+        self.move_group.set_start_state(
+            self.get_robot_state_from_joint_dict(start_joint_dict)
+        )
+
+        ## set planning params ##
+        # self.move_group.set_planner_id('BiTRRT')
+        # move_group.set_support_surface_name("table__linksurface")
+        self.move_group.set_planning_time(14)
+        self.move_group.set_num_planning_attempts(5)
+        self.move_group.allow_replanning(False)
+
+        ## plan pose ##
+        scale = magnitude / dist(direction, (0, 0, 0))
+        wpose = homogeneous2pose_msg(self.robot.get_tip_link_pose(start_joint_dict))
+        wpose.position.x += scale * direction[0]
+        wpose.position.y += scale * direction[1]
+        wpose.position.z += scale * direction[2]
+        waypoints = [copy.deepcopy(wpose)]
+
+        raw_plan, fraction = self.move_group.compute_cartesian_path(
+            waypoints, eef_step, jump_threshold, avoid_collisions=avoid_collisions
+        )
+        plan = (fraction, raw_plan)
+        joint_names, positions, _ = self.extract_plan_to_joint_list(plan)
+        joint_dict_list = self.format_joint_name_val_dict(joint_names, positions)
+        return joint_dict_list
+
     def straight_line_motion(
         self,
         start_joint_dict,
@@ -491,7 +616,12 @@ class MotionPlanner():
         # convert from joint dict to joint list
         start_joint = []
         for i in range(len(robot.joint_names)):
-            start_joint.append(start_joint_dict[robot.joint_names[i]])
+            start_joint.append(
+                start_joint_dict.get(
+                    robot.joint_names[i],
+                    robot.joint_dict[robot.joint_names[i]],  # fallback to current value
+                )
+            )
 
         prev_joint = start_joint
 
@@ -874,6 +1004,6 @@ class MotionPlanner():
                 return False
 
             # self.scene_interface.add_object(co)
-            print('co', co)
+            # print('co', co)
             self.co_pub.publish(co)
         return True

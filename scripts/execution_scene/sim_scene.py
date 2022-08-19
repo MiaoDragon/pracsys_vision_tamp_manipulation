@@ -332,7 +332,7 @@ class ExecutionSystem():
                     np.linalg.inv(self.attached_obj_pose)
                 )
 
-            rospy.sleep(0.01)
+            rospy.sleep(0.0001)
 
         # input('waiting...')
         # rospy.sleep(0.03)

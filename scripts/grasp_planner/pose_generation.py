@@ -313,7 +313,7 @@ def geometric_gripper_grasp_pose_generation(
                 grasps.append([[x * sx, 0, sz / 2], vert[0]])  # top
                 grasps.append([[x * sx, 0, sz / 2], vert[2]])  # top
 
-        offset1 = (offset1[0], offset1[1], offset1[2] + gw * 0.75)
+        offset1 = (offset1[0], offset1[1], offset1[2] + gw * 0.5)
     elif shape[2] == p.GEOM_CYLINDER or shape[2] == p.GEOM_CAPSULE:
         h, r = shape[3][:2]
         noz = nearOdd(h / (gw))
@@ -380,6 +380,13 @@ def geometric_gripper_grasp_pose_generation(
             robot.init_joint_vals,
             # threshold=stopThreshold,
         )
+        valid, jointPoses2 = robot.get_ik(
+            endEffectorId,
+            pos2,
+            rot2,
+            robot.init_joint_vals,
+            # threshold=stopThreshold,
+        )
         # input(rot1)
         # if dist < filterThreshold:  # filter by succesful IK
         if valid:
@@ -407,6 +414,7 @@ def geometric_gripper_grasp_pose_generation(
                     {
                         'all_joints': joint_states,
                         'dof_joints': jointPoses,
+                        'dof_joints_offset': jointPoses2,
                         'eof_pose': list(pos1) + list(rot1),
                         'eof_pose_offset': list(pos2) + list(rot2),
                         'collisions': collisions,

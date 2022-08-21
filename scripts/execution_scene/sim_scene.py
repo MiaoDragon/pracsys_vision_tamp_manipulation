@@ -186,6 +186,7 @@ class ExecutionSystem():
 
         # ignore robot and table when publishing object states
         self.ignore_ids = {0, 1, 2, 3, 4, 5}
+        self.ignore_ids = {0, 1}
 
         self.timer = rospy.Timer(rospy.Duration(0.01), self.publish_joint_state)
 
@@ -332,7 +333,7 @@ class ExecutionSystem():
                     np.linalg.inv(self.attached_obj_pose)
                 )
 
-            rospy.sleep(0.0001)
+            rospy.sleep(0.000001)
 
         # input('waiting...')
         # rospy.sleep(0.03)
@@ -514,7 +515,7 @@ def main():
     rospy.init_node("execution_system")
     rospy.on_shutdown(lambda: os.system('pkill -9 -f task_planner'))
     # rospy.sleep(1.0)
-    scene_name = 'scene2'
+    scene_name = 'scene_table'
 
     if int(sys.argv[1]) > 0:
         load = True

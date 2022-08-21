@@ -163,7 +163,7 @@ def main():
     rospy.init_node("task_planner")
     rospy.on_shutdown(lambda: os.system('pkill -9 -f task_planner'))
     # rospy.sleep(1.0)
-    scene_name = 'scene2'
+    scene_name = 'scene_table'
     prob_id = sys.argv[1]
     # trial_num = int(sys.argv[2])
     task_planner = TaskPlanner(scene_name, prob_id)

@@ -79,7 +79,7 @@ class MotionPlanner():
         # set up workspace collision
         components = workspace.components
         for component_name, component in components.items():
-            print(component_name, component)
+            # print(component_name, component)
             shape = component['shape']
             shape = np.array(shape)
             pos = component['pose']['pos']
@@ -258,13 +258,14 @@ class MotionPlanner():
         # )
 
         ## set planning params ##
-        self.move_group.set_planner_id('BiTRRT')
-        self.move_group.set_planning_time(15)
-        self.move_group.set_num_planning_attempts(25)
+        # self.move_group.set_planner_id('BiTRRT')
+        self.move_group.set_planning_time(14)
+        self.move_group.set_num_planning_attempts(5)
         self.move_group.allow_replanning(False)
 
         ## plan pose ##
         self.move_group.clear_pose_targets()
+        # print(target_poses)
         self.move_group.set_pose_targets(target_poses)
         # success, raw_plan, planning_time, error_code = move_group.plan()
         plan = self.move_group.plan()
@@ -282,6 +283,7 @@ class MotionPlanner():
         self,
         start_joint_dict,
         target,
+        robot,
         disp_dist=0.05,
         disp_dir=(0, 0, 1),
         is_pre_dir_abs=False,
@@ -289,12 +291,14 @@ class MotionPlanner():
     ):
 
         ## plan to pre pose ##
-        # plan_dict_list1 = self.pose_motion_plan(
-        #     start_joint_dict, target, attached_acos
-        # )
-        plan_dict_list1 = self.joint_dict_motion_plan(
-            start_joint_dict, target, attached_acos=attached_acos
-        )
+        if True:
+            plan_dict_list1 = self.pose_motion_plan(
+                start_joint_dict, target, attached_acos
+            )
+        else:
+            plan_dict_list1 = self.joint_dict_motion_plan(
+                start_joint_dict, target, attached_acos=attached_acos
+            )
 
         if not plan_dict_list1:
             return []
@@ -305,22 +309,33 @@ class MotionPlanner():
         start_tip_pose = self.robot.get_tip_link_pose(new_start_joint_dict)
 
         # compute displacement
-        normalizer = disp_dist / dist(disp_dir, (0, 0, 0))
-        translation = translation_matrix(normalizer * np.array(disp_dir))
-        current_pose = np.eye(4) if is_pre_dir_abs else copy.deepcopy(start_tip_pose)
+        translation = translation_matrix(np.array(disp_dir))
+        print(translation)
+        current_pose = np.eye(4)
+        if not is_pre_dir_abs:
+            current_pose[:3, :3] = start_tip_pose[:3, :3]
         diff_tip_pose = concatenate_matrices(current_pose, translation)
+        normalizer = disp_dist / dist(diff_tip_pose[:3, 3], (0, 0, 0))
+        print(normalizer)
+        print(diff_tip_pose)
+        diff_tip_pose[:3, 3] *= normalizer
         print(diff_tip_pose)
 
         # plan straight line
-        plan_dict_list2 = self.straight_line_motion(
+        plan_dict_list2 = self.straight_line_motion2(
             new_start_joint_dict,
-            start_tip_pose,
-            diff_tip_pose,
-            self.robot,
-            collision_check=False,
-            workspace=self.workspace,
-            display=False
+            direction=diff_tip_pose[:3, 3],
+            magnitude=disp_dist,
         )
+        # plan_dict_list2 = self.straight_line_motion(
+        #     new_start_joint_dict,
+        #     start_tip_pose,
+        #     diff_tip_pose,
+        #     robot,
+        #     collision_check=False,
+        #     workspace=self.workspace,
+        #     display=True
+        # )
 
         return plan_dict_list1 + plan_dict_list2
 
@@ -559,8 +574,8 @@ class MotionPlanner():
         start_joint_dict,
         direction=(0, 0, 1),
         magnitude=1,
-        eef_step=0.005,
-        jump_threshold=0.0,
+        eef_step=0.001,
+        jump_threshold=5.0,
         avoid_collisions=True,
     ):
         ## set initial state ##
@@ -610,6 +625,7 @@ class MotionPlanner():
         step = 0.005
         n_step = int(np.ceil(pose_dist / step))
         step = pose_dist / n_step
+        print(n_step, step)
 
         tip_pos = start_pos
         quat = tf.quaternion_from_matrix(start_tip_pose)  # w x y z
@@ -655,7 +671,8 @@ class MotionPlanner():
                 upper_lim=ul,
                 jr=jr,
                 collision_check=ik_collision_check,
-                workspace=workspace
+                workspace=workspace,
+                visualize=display
             )
             if display:
                 input('step %d/%d..., valid: %d' % (i, n_step, valid))

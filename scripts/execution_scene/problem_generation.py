@@ -155,8 +155,8 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
                 z_scales = np.arange(1.0, 1.5, 0.05) / 10
             elif obj_shape == 'wall':
                 x_scales = np.arange(0.25, 0.40, 0.05) / 10
-                y_scales = np.arange(2.0, 2.5, 0.05) / 10
-                z_scales = np.arange(1.5, 2.0, 0.05) / 10
+                y_scales = np.arange(1.0, 2.0, 0.05) / 10
+                z_scales = np.arange(1.2, 1.8, 0.05) / 10
 
             # if i == 0:
             #     color = [1.0, 0., 0., 1]

@@ -1,5 +1,5 @@
 {
-    "robot": 
+    "robot":
     {
         "pose":
         {
@@ -9,24 +9,24 @@
         "urdf": "data/models/robot/motoman.urdf",
         "urdf_o": "urdf/motoman.urdf"
     },
-    "workspace": 
+    "workspace":
     {
         "components":
         {
-            "shelf_bottom": 
+            "shelf_bottom":
             {
                 "pose":
                 {
-                    "pos": [0.65,0,0.5],
+                    "pos": [0.65,0,0.45],
                     "ori": [0,0,0,1]
                 },
-                "shape": [0.35, 0.9, 1.0]
+                "shape": [0.35, 0.9, 0.9]
             },
             "shelf_top":
             {
                 "pose":
                 {
-                    "pos": [0.65,0,1.325],
+                    "pos": [0.65,0,1.425],
                     "ori": [0,0,0,1]
                 },
                 "shape": [0.35,0.9,0.05]
@@ -38,7 +38,7 @@
                     "pos": [0.65,-0.425,1.15],
                     "ori": [0,0,0,1]
                 },
-                "shape": [0.35,0.05,0.3]
+                "shape": [0.35,0.05,0.5]
             },
             "shelf_padding_right":
             {
@@ -47,7 +47,7 @@
                     "pos": [0.65,0.425,1.15],
                     "ori": [0,0,0,1]
                 },
-                "shape": [0.35,0.05,0.3]
+                "shape": [0.35,0.05,0.5]
             },
             "shelf_padding_back":
             {
@@ -56,12 +56,12 @@
                     "pos": [0.8,0,1.15],
                     "ori": [0,0,0,1]
                 },
-                "shape": [0.05,0.9,0.3]
+                "shape": [0.05,0.9,0.5]
             }
         },
-        "pos": [0.4,0,0],
+        "pos": [0.3,0,0],
         "ori": [0,0,0,1],
-        "region_low": [0.475, -0.4, 1.0],
+        "region_low": [0.475, -0.4, 0.9],
         "region_high": [0.775, 0.4, 1.3],
         "padding": [0.04, 0.03, 0.0]
     },

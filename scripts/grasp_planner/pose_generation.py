@@ -193,7 +193,8 @@ def geometric_suction_grasp_pose_generation(
                 if len(contacts):
                     collisions.add(obj_pid)
             # dont add if collides with shelf
-            if not collisions.intersection([1, 2, 3, 4, 5]):
+            # if not collisions.intersection([1, 2, 3, 4, 5]):
+            if not collisions.intersection([1]):
                 filteredJointPoses.append(
                     {
                         'all_joints': joint_states,
@@ -409,7 +410,8 @@ def geometric_gripper_grasp_pose_generation(
                 if len(contacts):
                     collisions.add(obj_pid)
             # dont add if collides with shelf
-            if not collisions.intersection([1, 2, 3, 4, 5]):
+            # if not collisions.intersection([1, 2, 3, 4, 5]):
+            if not collisions.intersection([1]):
                 filteredJointPoses.append(
                     {
                         'all_joints': joint_states,

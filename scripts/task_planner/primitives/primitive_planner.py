@@ -51,15 +51,15 @@ class PrimitivePlanner():
         # robot = self.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
         robot = self.execution.scene.robot
-        print("***", self.scene == self.execution.scene, "***")
-        print(list(self.perception.filtered_occluded_dict.keys()))
+        # print("***", self.scene == self.execution.scene, "***")
+        # print(list(self.perception.filtered_occluded_dict.keys()))
 
         t0 = time.time()
         filteredPoses = obj_pose_generation.geometric_gripper_grasp_pose_generation(
             obj_local_id,
             robot,
             self.scene.workspace,
-            offset2=(0, 0, -0.05),
+            offset2=(0, 0, -0.03),
         )
         t1 = time.time()
 
@@ -78,8 +78,9 @@ class PrimitivePlanner():
         input("Done...")
         robot.set_joints_without_memorize(robot.joint_vals)
 
-    def pick(self, obj):
+    def pick(self, obj, pre_grasp_dist=0.02):
         robot = self.execution.scene.robot
+        print("***", self.motion_planner.robot == robot, "***")
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
         ## Grasp ##
         t0 = time.time()
@@ -87,7 +88,7 @@ class PrimitivePlanner():
             obj_local_id,
             robot,
             self.scene.workspace,
-            offset2=(0, 0, 0.05),
+            offset2=(0, 0, -pre_grasp_dist),
         )
         t1 = time.time()
         print("Grasp Time: ", t1 - t0)
@@ -119,9 +120,10 @@ class PrimitivePlanner():
         # )
         pick_joint_dict_list = self.motion_planner.ee_approach_plan(
             robot.joint_dict,
-            # eof_poses,
-            pick_joint_dict,
-            disp_dist=0.05,
+            eof_poses,
+            # pick_joint_dict,
+            robot,
+            disp_dist=pre_grasp_dist,
             disp_dir=(0, 0, 1),
             is_pre_dir_abs=False,
             attached_acos=[],
@@ -131,21 +133,22 @@ class PrimitivePlanner():
         start_joint_dict = dict(pick_joint_dict_list[-1])
         pick_tip_pose = robot.get_tip_link_pose(start_joint_dict)
         lift_tip_pose = np.eye(4)
-        lift_tip_pose[:3, 3] = np.array([0, 0, 0.05])  # lift up by 0.05
+        lift_tip_pose[:3, 3] = np.array([0, 0, 0.04])  # lift up by 0.05
 
-        lift_joint_dict_list = self.motion_planner.straight_line_motion(
-            start_joint_dict,
-            pick_tip_pose,
-            lift_tip_pose,
-            robot,
-            collision_check=False,
-            workspace=self.scene.workspace,
-            display=False
-        )
-        # lift_joint_dict_list = self.motion_planner.straight_line_motion2(
+        # lift_joint_dict_list = self.motion_planner.straight_line_motion(
         #     start_joint_dict,
-        #     magnitude=0.05
+        #     pick_tip_pose,
+        #     lift_tip_pose,
+        #     robot,
+        #     collision_check=False,
+        #     workspace=self.scene.workspace,
+        #     display=False
         # )
+        lift_joint_dict_list = self.motion_planner.straight_line_motion2(
+            start_joint_dict,
+            direction=(0, 0, 1),
+            magnitude=0.04,
+        )
         t1 = time.time()
         print("Plan Time: ", t1 - t0)
 

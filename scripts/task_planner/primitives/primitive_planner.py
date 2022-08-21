@@ -92,71 +92,78 @@ class PrimitivePlanner():
         )
         t1 = time.time()
         print("Grasp Time: ", t1 - t0)
-
-        # pick poses
-        # for poseInfo in filteredPoses:
-        #     pose = poseInfo['all_joints']
-        #     sparse_pose = poseInfo['dof_joints']
-        #     cols = poseInfo['collisions']
-        pick_joint_dict = robot.joint_vals_to_dict(filteredPoses[0]['dof_joints_offset'])
         eof_poses = [
             x['eof_pose_offset'] for x in filteredPoses if len(x['collisions']) == 0
         ]
 
         ## Set Collision Space ##
         obs_msgs = []
-        for obs_id in self.perception.filtered_occluded_dict.keys():
+        # valid_objects = self.perception.obtain_unhidden_objects([], [1])
+        # print(valid_objects)
+        # for obs_id in self.perception.filtered_occluded_dict.keys():
+        for obs_id in self.execution.object_state_msg.keys():
             # print(obs_id)
             # print(self.execution.object_state_msg[str(obs_id)].name)
             obs_msgs.append(self.execution.object_state_msg[str(obs_id)])
         self.motion_planner.set_collision_env_with_models(obs_msgs)
 
-        ## Plan Pick ##
-        t0 = time.time()
-        # pick_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
-        #     robot.joint_dict,
-        #     pick_joint_dict,
-        #     robot,
-        # )
-        pick_joint_dict_list = self.motion_planner.ee_approach_plan(
-            robot.joint_dict,
-            eof_poses,
-            # pick_joint_dict,
-            robot,
-            disp_dist=pre_grasp_dist,
-            disp_dir=(0, 0, 1),
-            is_pre_dir_abs=False,
-            attached_acos=[],
-        )
+        # pick poses
+        for poseInfo in filteredPoses:
+            if len(poseInfo['collisions']) != 0:
+                break
 
-        ## Plan Lift ##
-        start_joint_dict = dict(pick_joint_dict_list[-1])
-        pick_tip_pose = robot.get_tip_link_pose(start_joint_dict)
-        lift_tip_pose = np.eye(4)
-        lift_tip_pose[:3, 3] = np.array([0, 0, 0.04])  # lift up by 0.05
+            pick_joint_dict = robot.joint_vals_to_dict(poseInfo['dof_joints'])
 
-        # lift_joint_dict_list = self.motion_planner.straight_line_motion(
-        #     start_joint_dict,
-        #     pick_tip_pose,
-        #     lift_tip_pose,
-        #     robot,
-        #     collision_check=False,
-        #     workspace=self.scene.workspace,
-        #     display=False
-        # )
-        lift_joint_dict_list = self.motion_planner.straight_line_motion2(
-            start_joint_dict,
-            direction=(0, 0, 1),
-            magnitude=0.04,
-        )
-        t1 = time.time()
-        print("Plan Time: ", t1 - t0)
+            ## Plan Pick ##
+            t0 = time.time()
+            # pick_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
+            #     robot.joint_dict,
+            #     pick_joint_dict,
+            #     robot,
+            # )
+            pick_joint_dict_list = self.motion_planner.ee_approach_plan(
+                robot.joint_dict,
+                # eof_poses,
+                pick_joint_dict,
+                # robot,
+                disp_dist=pre_grasp_dist,
+                disp_dir=(0, 0, 1),
+                is_pre_dir_abs=False,
+                attached_acos=[],
+            )
 
-        ## Execute ##
-        self.execution.execute_traj(pick_joint_dict_list)
-        self.execution.attach_obj(obj.obj_id)
-        self.execution.execute_traj(lift_joint_dict_list)
-        self.execution.detach_obj()
+            ## Plan Lift ##
+            start_joint_dict = dict(pick_joint_dict_list[-1])
+            pick_tip_pose = robot.get_tip_link_pose(start_joint_dict)
+            lift_tip_pose = np.eye(4)
+            lift_tip_pose[:3, 3] = np.array([0, 0, 0.04])  # lift up by 0.05
+
+            lift_joint_dict_list = self.motion_planner.straight_line_motion(
+                start_joint_dict,
+                pick_tip_pose,
+                lift_tip_pose,
+                robot,
+                collision_check=False,
+                workspace=self.scene.workspace,
+                display=False
+            )
+            # lift_joint_dict_list = self.motion_planner.straight_line_motion2(
+            #     start_joint_dict,
+            #     direction=(0, 0, 1),
+            #     magnitude=0.04,
+            # )
+            t1 = time.time()
+            print("Plan Time: ", t1 - t0)
+
+            ## Execute ##
+            print("Succeded to plan to grasp!")
+            self.execution.execute_traj(pick_joint_dict_list)
+            self.execution.attach_obj(obj.obj_id)
+            self.execution.execute_traj(lift_joint_dict_list)
+            self.execution.detach_obj()
+            return
+
+        print("Failed to plan to grasp!")
 
     def plan_to_suction_pose(
         self,

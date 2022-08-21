@@ -185,7 +185,7 @@ class ExecutionSystem():
         self.obj_pub = rospy.Publisher('object_state', PercievedObject, queue_size=5)
 
         # ignore robot and table when publishing object states
-        self.ignore_ids = {0, 1, 2, 3, 4, 5}
+        # self.ignore_ids = {0, 1, 2, 3, 4, 5}
         self.ignore_ids = {0, 1}
 
         self.timer = rospy.Timer(rospy.Duration(0.01), self.publish_joint_state)

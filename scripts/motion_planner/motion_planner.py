@@ -282,60 +282,48 @@ class MotionPlanner():
     def ee_approach_plan(
         self,
         start_joint_dict,
-        target,
-        robot,
+        target_joint_dict,
+        # robot,
         disp_dist=0.05,
         disp_dir=(0, 0, 1),
         is_pre_dir_abs=False,
         attached_acos=[],
     ):
 
-        ## plan to pre pose ##
-        if True:
-            plan_dict_list1 = self.pose_motion_plan(
-                start_joint_dict, target, attached_acos
-            )
-        else:
-            plan_dict_list1 = self.joint_dict_motion_plan(
-                start_joint_dict, target, attached_acos=attached_acos
-            )
+        ## plan straight line approach reverse ##
 
-        if not plan_dict_list1:
-            return []
-
-        ## plan straight line approach ##
-        # start from pre pose
-        new_start_joint_dict = dict(plan_dict_list1[-1])
-        start_tip_pose = self.robot.get_tip_link_pose(new_start_joint_dict)
-
-        # compute displacement
-        translation = translation_matrix(np.array(disp_dir))
-        print(translation)
+        # compute displacement matrix
+        translation = translation_matrix(-np.array(disp_dir))
         current_pose = np.eye(4)
+        tip_pose = self.robot.get_tip_link_pose(target_joint_dict)
         if not is_pre_dir_abs:
-            current_pose[:3, :3] = start_tip_pose[:3, :3]
+            current_pose[:3, :3] = tip_pose[:3, :3]
         diff_tip_pose = concatenate_matrices(current_pose, translation)
         normalizer = disp_dist / dist(diff_tip_pose[:3, 3], (0, 0, 0))
-        print(normalizer)
-        print(diff_tip_pose)
         diff_tip_pose[:3, 3] *= normalizer
-        print(diff_tip_pose)
 
         # plan straight line
-        plan_dict_list2 = self.straight_line_motion2(
-            new_start_joint_dict,
-            direction=diff_tip_pose[:3, 3],
-            magnitude=disp_dist,
-        )
-        # plan_dict_list2 = self.straight_line_motion(
-        #     new_start_joint_dict,
-        #     start_tip_pose,
-        #     diff_tip_pose,
-        #     robot,
-        #     collision_check=False,
-        #     workspace=self.workspace,
-        #     display=True
+        # plan_dict_list2 = self.straight_line_motion2(
+        #     target_joint_dict,
+        #     direction=diff_tip_pose[:3, 3],
+        #     magnitude=disp_dist,
         # )
+        plan_dict_list2 = self.straight_line_motion(
+            target_joint_dict,
+            tip_pose,
+            diff_tip_pose,
+            self.robot,
+            collision_check=False,
+            workspace=self.workspace,
+            display=False
+        )
+        plan_dict_list2.reverse()
+        plan_dict_list2 += [target_joint_dict]
+
+        ## plan to pre pose ##
+        plan_dict_list1 = self.joint_dict_motion_plan(
+            start_joint_dict, plan_dict_list2[0], attached_acos=attached_acos
+        )
 
         return plan_dict_list1 + plan_dict_list2
 

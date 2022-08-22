@@ -16,6 +16,7 @@ from .rearrangement import Rearrangement
 from . import utils, obj_pose_generation
 import cv2
 from utils.visual_utils import *
+from utils.transform_utils import *
 
 
 class PrimitivePlanner():
@@ -157,13 +158,139 @@ class PrimitivePlanner():
 
             ## Execute ##
             print("Succeded to plan to grasp!")
-            self.execution.execute_traj(pick_joint_dict_list)
-            self.execution.attach_obj(obj.obj_id)
-            self.execution.execute_traj(lift_joint_dict_list)
-            self.execution.detach_obj()
-            return
+            # self.execution.detach_obj()
+            # self.execution.execute_traj(pick_joint_dict_list)
+            # self.execution.attach_obj(obj.obj_id)
+            # self.execution.execute_traj(lift_joint_dict_list)
+            return pick_joint_dict_list, lift_joint_dict_list
 
         print("Failed to plan to grasp!")
+        return [], []
+
+    def place(self, obj, start_joint_dict, pre_place_dist=0.08):
+        robot = self.execution.scene.robot
+        obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+
+        ## Set Collision Space ##
+        obs_msgs = []
+        # valid_objects = self.perception.obtain_unhidden_objects([], [1])
+        # print(valid_objects)
+        # for obs_id in self.perception.filtered_occluded_dict.keys():
+        for obs_id in self.execution.object_state_msg.keys():
+            # print(obs_id)
+            # print(self.execution.object_state_msg[str(obs_id)].name)
+            obs_msgs.append(self.execution.object_state_msg[str(obs_id)])
+        self.motion_planner.set_collision_env_with_models(obs_msgs)
+
+        ## Place ##
+        max_iters = 100
+        count = 0
+        while count < max_iters:
+            count += 1
+
+            # sample placement postition
+            t0 = time.time()
+            sample_pos = obj_pose_generation.generate_random_placement(
+                obj, robot, self.perception, self.scene.workspace
+            )
+            t1 = time.time()
+            print("Placement Sample Time: ", t1 - t0)
+            print(sample_pos)
+
+            # get gripper to object matrix
+            obj_transform = translation_quaternion2homogeneous(
+                *p.getBasePositionAndOrientation(obj_local_id, robot.pybullet_id)
+            )
+            ee_transform = robot.get_tip_link_pose(start_joint_dict)
+            obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
+
+            # get gripper transform at placement
+            print(obj_transform)
+            obj_transform[:3, 3] = sample_pos
+            print(obj_transform)
+            obj2gripper = np.linalg.inv(obj_rel_transform)
+            gripper_transform = obj_transform.dot(obj2gripper)
+            pos, rot = homogeneous2translation_quaternion(gripper_transform)
+
+            # check IK
+            # robot.set_joints_without_memorize(robot.init_joint_vals)
+            valid, jointPoses = robot.get_ik(
+                robot.tip_link_name,
+                pos,
+                rot,
+                robot.init_joint_vals,
+            )
+            if not valid:
+                robot.set_joints_without_memorize(robot.joint_vals)
+                continue
+            ignore_ids = [robot.robot_id]
+            collisions = set()
+            for i in range(p.getNumBodies(physicsClientId=robot.pybullet_id)):
+                obj_pid = p.getBodyUniqueId(i, physicsClientId=robot.pybullet_id)
+                if obj_pid in ignore_ids:
+                    continue
+                contacts = p.getClosestPoints(
+                    robot.robot_id,
+                    obj_pid,
+                    distance=0.,
+                    physicsClientId=robot.pybullet_id,
+                )
+                if len(contacts):
+                    collisions.add(obj_pid)
+            print(collisions)
+            if len(collisions) > 0:
+                robot.set_joints_without_memorize(robot.joint_vals)
+                continue
+
+            robot.set_joints_without_memorize(robot.joint_vals)
+
+            place_joint_dict = robot.joint_vals_to_dict(jointPoses)
+
+            ## Plan Place ##
+            t0 = time.time()
+            self.motion_planner.attach_known(str(obj_local_id))
+            place_joint_dict_list = self.motion_planner.ee_approach_plan(
+                start_joint_dict,
+                place_joint_dict,
+                disp_dist=pre_place_dist,
+                disp_dir=(0, 0, -1),
+                is_pre_dir_abs=True,
+                attached_acos=[],
+            )
+
+            ## Plan Lift ##
+            new_start_joint_dict = dict(place_joint_dict_list[-1])
+            place_tip_pose = robot.get_tip_link_pose(new_start_joint_dict)
+            lift_tip_pose = np.eye(4)
+            lift_tip_pose[:3, 3] = np.array([0, 0, 0.06])  # lift up by 0.05
+
+            self.motion_planner.detach_known(str(obj_local_id))
+            lift_joint_dict_list = self.motion_planner.straight_line_motion(
+                new_start_joint_dict,
+                place_tip_pose,
+                lift_tip_pose,
+                robot,
+                collision_check=False,
+                workspace=self.scene.workspace,
+                display=False
+            )
+            # lift_joint_dict_list = self.motion_planner.straight_line_motion2(
+            #     start_joint_dict,
+            #     direction=(0, 0, 1),
+            #     magnitude=0.06,
+            # )
+            t1 = time.time()
+            print("Plan Time: ", t1 - t0)
+
+            ## Execute ##
+            print("Succeded to plan to place!")
+            # self.execution.execute_traj(place_joint_dict_list)
+            # self.execution.detach_obj()
+            # self.execution.execute_traj(lift_joint_dict_list)
+            return place_joint_dict_list, lift_joint_dict_list
+
+        print("Failed to plan to place!")
+        return [], []
 
     def plan_to_suction_pose(
         self,

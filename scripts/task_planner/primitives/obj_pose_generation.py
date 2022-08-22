@@ -15,6 +15,57 @@ geometric_suction_grasp_pose_generation = pose_generation.geometric_suction_gras
 geometric_gripper_grasp_pose_generation = pose_generation.geometric_gripper_grasp_pose_generation
 
 
+def generate_random_placement(obj, robot, perception, workspace, max_iters=1000):
+    save_state = p.getBasePositionAndOrientation(
+        obj.pybullet_id,
+        physicsClientId=robot.pybullet_id,
+    )
+
+    ws_low = workspace.region_low
+    ws_high = workspace.region_high
+
+    mins, maxs = p.getAABB(obj.pybullet_id, physicsClientId=robot.pybullet_id)
+
+    # get coords for object placement
+    x_mid = (maxs[0] - mins[0]) / 2.0
+    y_mid = (maxs[1] - mins[1]) / 2.0
+    z_mid = (maxs[2] - mins[2]) / 2.0
+    z = z_mid + ws_low[2] + 0.001
+
+    count = 0
+    while count < max_iters:
+        count += 1
+        x = np.random.uniform(low=ws_low[0] + x_mid, high=ws_high[0] - x_mid)
+        y = np.random.uniform(low=ws_low[1] + y_mid, high=ws_high[1] - y_mid)
+        p.resetBasePositionAndOrientation(
+            obj.pybullet_id,
+            (x, y, z),
+            save_state[1],
+            physicsClientId=robot.pybullet_id,
+        )
+        collision = False
+        for other_obj in perception.objects.values():
+            contacts = p.getClosestPoints(
+                obj.pybullet_id,
+                other_obj.pybullet_id,
+                distance=0.,
+                physicsClientId=robot.pybullet_id,
+            )
+            if len(contacts) > 0:
+                collision = True
+                break
+        if not collision:
+            break
+
+    p.resetBasePositionAndOrientation(
+        obj.pybullet_id,
+        *save_state,
+        physicsClientId=robot.pybullet_id,
+    )
+
+    return (x, y, z)
+
+
 def generate_start_poses(
     obj_id,
     obj,

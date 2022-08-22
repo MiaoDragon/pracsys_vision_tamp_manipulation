@@ -131,7 +131,7 @@ class TaskPlanner():
             )
 
         ### Grasp Sampling Test ###
-        print("Grasp Test")
+        print("* Grasp Test *")
         pose_ind = input("Please Enter Object Id: ")
         while pose_ind != 'q':
             try:
@@ -144,8 +144,8 @@ class TaskPlanner():
             pose_ind = input("Please Enter Object Id: ")
         ### Grasp Sampling Test End ###
 
-        ### Pick Test ###
-        print("Pick Test")
+        ### Pick & Place Test ###
+        print("* Pick & Place Test *")
         pose_ind = input("Please Enter Object Id: ")
         while pose_ind != 'q':
             try:
@@ -154,7 +154,17 @@ class TaskPlanner():
                 pose_ind = input("Please Enter Object Id: ")
                 continue
 
-            self.planner.pick(self.perception.objects[obj_id])
+            obj = self.perception.objects[obj_id]
+            pick, pklift = self.planner.pick(obj)
+            place, pclift = self.planner.place(obj, pklift[-1])
+            print("Execution!...")
+            self.execution.detach_obj()
+            self.execution.execute_traj(pick)
+            self.execution.attach_obj(obj_id)
+            self.execution.execute_traj(pklift)
+            self.execution.execute_traj(place)
+            self.execution.detach_obj()
+            self.execution.execute_traj(pclift)
             pose_ind = input("Please Enter Object Id: ")
         ### Pick Test End ###
 

@@ -313,7 +313,7 @@ class MotionPlanner():
             tip_pose,
             diff_tip_pose,
             self.robot,
-            collision_check=False,
+            collision_check=True,
             workspace=self.workspace,
             display=False
         )
@@ -1012,3 +1012,49 @@ class MotionPlanner():
             # print('co', co)
             self.co_pub.publish(co)
         return True
+
+    def attach_known(self, obj_name, timeout=4):
+        eef_link = 'motoman_right_ee'
+        touch_links = ['motoman_right_ee', 'arm_right_link_tool0', 'motoman_right_hand']
+        self.scene_interface.attach_box(eef_link, obj_name, touch_links=touch_links)
+
+        return self.wait_for_state_update(
+            obj_name, box_is_attached=True, box_is_known=False, timeout=timeout
+        )
+
+    def detach_known(self, obj_name, timeout=4):
+        eef_link = 'motoman_right_ee'
+        self.scene_interface.remove_attached_object(eef_link, name=obj_name)
+
+        return self.wait_for_state_update(
+            obj_name, box_is_known=True, box_is_attached=False, timeout=timeout
+        )
+
+    def wait_for_state_update(
+        self,
+        obj_name,
+        box_is_known=False,
+        box_is_attached=False,
+        timeout=4,
+    ):
+        start = rospy.get_time()
+        seconds = rospy.get_time()
+        while (seconds - start < timeout) and not rospy.is_shutdown():
+            # Test if the box is in attached objects
+            attached_objects = self.scene_interface.get_attached_objects([obj_name])
+            is_attached = len(attached_objects.keys()) > 0
+
+            # Test if the box is in the scene.
+            # Note that attaching the box will remove it from known_objects
+            is_known = obj_name in self.scene_interface.get_known_object_names()
+
+            # Test if we are in the expected state
+            if (box_is_attached == is_attached) and (box_is_known == is_known):
+                return True
+
+            # Sleep so that we give other threads time on the processor
+            rospy.sleep(0.1)
+            seconds = rospy.get_time()
+
+        # If we exited the while loop without returning then we timed out
+        return False

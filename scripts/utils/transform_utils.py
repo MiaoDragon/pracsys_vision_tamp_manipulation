@@ -49,5 +49,11 @@ def pose_msg2list(pose):
     return trans, rot
 
 
+def translation_quaternion2homogeneous(pos, quat):
+    trans = translation_matrix(pos)
+    rot = quaternion_matrix(quat)
+    return concatenate_matrices(trans, rot)
+
+
 def sgn(x):
     return x / abs(x)

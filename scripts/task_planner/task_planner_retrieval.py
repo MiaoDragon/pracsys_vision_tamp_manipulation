@@ -156,7 +156,7 @@ class TaskPlanner():
 
             obj = self.perception.objects[obj_id]
             pick, pklift = self.planner.pick(obj)
-            place, pclift = self.planner.place(obj, pklift[-1])
+            place, pclift = self.planner.place(obj, pklift[-1], pick[-1])
             print("Execution!...")
             self.execution.detach_obj()
             self.execution.execute_traj(pick)

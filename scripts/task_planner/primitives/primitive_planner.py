@@ -5,18 +5,21 @@ implement the primitive to be used by the task planner and pre-condition checkin
 Provide PyBullet planning scene to check IK, collisions, etc.
 and implementations of task actions
 """
-from motion_planner.motion_planner import MotionPlanner
 
-import pybullet as p
-import numpy as np
-import copy
 import gc
+import copy
 import time
-from .rearrangement import Rearrangement
-from . import utils, obj_pose_generation
+
 import cv2
+import std_msgs
+import numpy as np
+import pybullet as p
+
 from utils.visual_utils import *
 from utils.transform_utils import *
+from .rearrangement import Rearrangement
+from . import utils, obj_pose_generation
+from motion_planner.motion_planner import MotionPlanner
 
 
 class PrimitivePlanner():
@@ -167,7 +170,30 @@ class PrimitivePlanner():
         print("Failed to plan to grasp!")
         return [], []
 
-    def place(self, obj, start_joint_dict, pre_place_dist=0.08):
+    def attach_known(self, obj, robot, grasp_joint_dict):
+        obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        ee_transform_now = robot.get_tip_link_pose(
+            {key: 0.0
+             for key in grasp_joint_dict.keys()}
+        )
+        ee_transform_grasp = robot.get_tip_link_pose(grasp_joint_dict)
+        obj_transform = translation_quaternion2homogeneous(
+            *p.getBasePositionAndOrientation(obj_local_id, robot.pybullet_id)
+        )
+        obj_rel_transform = np.linalg.inv(ee_transform_grasp).dot(obj_transform)
+        obj_abs_transform = ee_transform_now.dot(obj_rel_transform)
+        pose = homogeneous2pose_stamped_msg(obj_abs_transform)
+        mins, maxs = p.getAABB(obj_local_id, physicsClientId=robot.pybullet_id)
+        size = [cmax - cmin for cmin, cmax in zip(mins, maxs)]
+        return self.motion_planner.attach_known(
+            str(obj.pybullet_id), pose=pose, size=size
+        )
+
+    def detach_known(self, obj):
+        self.motion_planner.detach_known(str(obj.pybullet_id))
+        # self.motion_planner.scene_interface.remove_world_object("TEMP_ATTACHED")
+
+    def place(self, obj, start_joint_dict, grasp_joint_dict, pre_place_dist=0.08):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
 
@@ -191,7 +217,10 @@ class PrimitivePlanner():
             # sample placement postition
             t0 = time.time()
             sample_pos = obj_pose_generation.generate_random_placement(
-                obj, robot, self.perception, self.scene.workspace
+                obj_local_id,
+                robot,
+                self.perception,
+                self.scene.workspace,
             )
             t1 = time.time()
             print("Placement Sample Time: ", t1 - t0)
@@ -201,7 +230,7 @@ class PrimitivePlanner():
             obj_transform = translation_quaternion2homogeneous(
                 *p.getBasePositionAndOrientation(obj_local_id, robot.pybullet_id)
             )
-            ee_transform = robot.get_tip_link_pose(start_joint_dict)
+            ee_transform = robot.get_tip_link_pose(grasp_joint_dict)
             obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
 
             # get gripper transform at placement
@@ -248,15 +277,20 @@ class PrimitivePlanner():
 
             ## Plan Place ##
             t0 = time.time()
-            self.motion_planner.attach_known(str(obj_local_id))
+            aco = self.attach_known(obj, robot, grasp_joint_dict)
+            # print(aco)
+            # input("?")
             place_joint_dict_list = self.motion_planner.ee_approach_plan(
                 start_joint_dict,
                 place_joint_dict,
                 disp_dist=pre_place_dist,
                 disp_dir=(0, 0, -1),
                 is_pre_dir_abs=True,
-                attached_acos=[],
+                attached_acos=[aco],
             )
+            self.detach_known(obj)
+            if not place_joint_dict_list:
+                continue
 
             ## Plan Lift ##
             new_start_joint_dict = dict(place_joint_dict_list[-1])
@@ -264,7 +298,6 @@ class PrimitivePlanner():
             lift_tip_pose = np.eye(4)
             lift_tip_pose[:3, 3] = np.array([0, 0, 0.06])  # lift up by 0.05
 
-            self.motion_planner.detach_known(str(obj_local_id))
             lift_joint_dict_list = self.motion_planner.straight_line_motion(
                 new_start_joint_dict,
                 place_tip_pose,

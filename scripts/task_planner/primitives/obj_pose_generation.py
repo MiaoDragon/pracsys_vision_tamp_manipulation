@@ -15,16 +15,16 @@ geometric_suction_grasp_pose_generation = pose_generation.geometric_suction_gras
 geometric_gripper_grasp_pose_generation = pose_generation.geometric_gripper_grasp_pose_generation
 
 
-def generate_random_placement(obj, robot, perception, workspace, max_iters=1000):
+def generate_random_placement(obj_local_id, robot, perception, workspace, max_iters=1000):
     save_state = p.getBasePositionAndOrientation(
-        obj.pybullet_id,
+        obj_local_id,
         physicsClientId=robot.pybullet_id,
     )
 
     ws_low = workspace.region_low
     ws_high = workspace.region_high
 
-    mins, maxs = p.getAABB(obj.pybullet_id, physicsClientId=robot.pybullet_id)
+    mins, maxs = p.getAABB(obj_local_id, physicsClientId=robot.pybullet_id)
 
     # get coords for object placement
     x_mid = (maxs[0] - mins[0]) / 2.0
@@ -38,7 +38,7 @@ def generate_random_placement(obj, robot, perception, workspace, max_iters=1000)
         x = np.random.uniform(low=ws_low[0] + x_mid, high=ws_high[0] - x_mid)
         y = np.random.uniform(low=ws_low[1] + y_mid, high=ws_high[1] - y_mid)
         p.resetBasePositionAndOrientation(
-            obj.pybullet_id,
+            obj_local_id,
             (x, y, z),
             save_state[1],
             physicsClientId=robot.pybullet_id,
@@ -46,9 +46,9 @@ def generate_random_placement(obj, robot, perception, workspace, max_iters=1000)
         collision = False
         for other_obj in perception.objects.values():
             contacts = p.getClosestPoints(
-                obj.pybullet_id,
+                obj_local_id,
                 other_obj.pybullet_id,
-                distance=0.,
+                distance=0.005,
                 physicsClientId=robot.pybullet_id,
             )
             if len(contacts) > 0:
@@ -58,7 +58,7 @@ def generate_random_placement(obj, robot, perception, workspace, max_iters=1000)
             break
 
     p.resetBasePositionAndOrientation(
-        obj.pybullet_id,
+        obj_local_id,
         *save_state,
         physicsClientId=robot.pybullet_id,
     )

@@ -188,7 +188,7 @@ class ExecutionSystem():
         # self.ignore_ids = {0, 1, 2, 3, 4, 5}
         self.ignore_ids = {0, 1}
 
-        self.timer = rospy.Timer(rospy.Duration(0.01), self.publish_joint_state)
+        # self.timer = rospy.Timer(rospy.Duration(0.01), self.publish_joint_state)
 
         # self.done_sub = rospy.Subscriber('done_msg', Int32, self.done_callback)
 

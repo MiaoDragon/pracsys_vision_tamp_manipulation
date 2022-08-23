@@ -374,17 +374,17 @@ def geometric_gripper_grasp_pose_generation(
         # self.set_joints(self.nuetral_joints)
         robot.set_joints_without_memorize(robot.init_joint_vals)
         # jointPoses, dist = robot.accurateIK(
-        valid, jointPoses = robot.get_ik(
-            endEffectorId,
-            pos1,
-            rot1,
-            robot.init_joint_vals,
-            # threshold=stopThreshold,
-        )
         valid, jointPoses2 = robot.get_ik(
             endEffectorId,
             pos2,
             rot2,
+            robot.init_joint_vals,
+            # threshold=stopThreshold,
+        )
+        valid, jointPoses = robot.get_ik(
+            endEffectorId,
+            pos1,
+            rot1,
             robot.init_joint_vals,
             # threshold=stopThreshold,
         )

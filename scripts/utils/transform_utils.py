@@ -1,5 +1,6 @@
+import std_msgs
 from tf.transformations import *
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, PoseStamped
 
 
 def homogeneous2translation_quaternion(homogeneous):
@@ -33,6 +34,14 @@ def homogeneous2pose_msg(homogeneous):
     pose.orientation.z = quat[2]
     pose.orientation.w = quat[3]
     return pose
+
+
+def homogeneous2pose_stamped_msg(homogeneous):
+    poseS = PoseStamped()
+    poseS.header = std_msgs.msg.Header()
+    poseS.header.frame_id = 'base'
+    poseS.pose = homogeneous2pose_msg(homogeneous)
+    return poseS
 
 
 def pose_msg2homogeneous(pose):

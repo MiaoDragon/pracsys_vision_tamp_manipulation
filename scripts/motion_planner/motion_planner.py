@@ -325,6 +325,9 @@ class MotionPlanner():
             start_joint_dict, plan_dict_list2[0], attached_acos=attached_acos
         )
 
+        if not plan_dict_list1:
+            return []
+
         return plan_dict_list1 + plan_dict_list2
 
     def suction_plan(
@@ -684,7 +687,7 @@ class MotionPlanner():
 
         return joint_dict_list
 
-    def display_robot_state(self, state, group_name='robot_arm'):
+    def display_robot_state(self, state, group_name='right_arm'):
         msg = DisplayRobotState()
         msg.state = state
         self.rs_pub.publish(msg)
@@ -1013,10 +1016,16 @@ class MotionPlanner():
             self.co_pub.publish(co)
         return True
 
-    def attach_known(self, obj_name, timeout=4):
+    def attach_known(self, obj_name, pose=None, size=(1, 1, 1), timeout=4):
         eef_link = 'motoman_right_ee'
         touch_links = ['motoman_right_ee', 'arm_right_link_tool0', 'motoman_right_hand']
-        self.scene_interface.attach_box(eef_link, obj_name, touch_links=touch_links)
+        self.scene_interface.attach_box(
+            eef_link,
+            obj_name,
+            pose=pose,
+            size=size,
+            touch_links=touch_links,
+        )
 
         return self.wait_for_state_update(
             obj_name, box_is_attached=True, box_is_known=False, timeout=timeout
@@ -1050,7 +1059,10 @@ class MotionPlanner():
 
             # Test if we are in the expected state
             if (box_is_attached == is_attached) and (box_is_known == is_known):
-                return True
+                if is_attached:
+                    return attached_objects[obj_name]
+                else:
+                    return True
 
             # Sleep so that we give other threads time on the processor
             rospy.sleep(0.1)

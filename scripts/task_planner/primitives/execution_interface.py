@@ -113,9 +113,8 @@ class ExecutionInterface():
             # * since we are using real-time perception, the robot state is updated
             # continuously in a separate thread.
 
-            rospy.sleep(1)  # wait for update of the robot state monitor
-
-            self.scene.robot.set_joint_from_dict_data(self.current_robot_state)
+            # rospy.sleep(1)  # wait for update of the robot state monitor
+            # self.scene.robot.set_joint_from_dict_data(self.current_robot_state)
 
             # self.scene.robot.set_joint_from_dict_data(joint_dict_list[-1])
             # if self.attached_obj is not None:
@@ -210,6 +209,7 @@ class ExecutionInterface():
         continuously update robot state obtained from execution_scene
         """
         self.current_robot_state = self.joint_dict_from_joint_state(msg.joint_state)
+        self.scene.robot.set_joint_from_dict_data(self.current_robot_state)
         if msg.attached_obj == -1:
             attached_obj = -1
         else:

@@ -15,7 +15,10 @@ geometric_suction_grasp_pose_generation = pose_generation.geometric_suction_gras
 geometric_gripper_grasp_pose_generation = pose_generation.geometric_gripper_grasp_pose_generation
 
 
-def generate_random_placement(obj_local_id, robot, perception, workspace, max_iters=1000):
+def generate_random_placement(
+    obj, robot, execution, perception, workspace, max_iters=1000
+):
+    obj_local_id = execution.object_local_id_dict[str(obj.pybullet_id)]
     save_state = p.getBasePositionAndOrientation(
         obj_local_id,
         physicsClientId=robot.pybullet_id,
@@ -47,7 +50,7 @@ def generate_random_placement(obj_local_id, robot, perception, workspace, max_it
         for other_obj in perception.objects.values():
             contacts = p.getClosestPoints(
                 obj_local_id,
-                other_obj.pybullet_id,
+                execution.object_local_id_dict[str(other_obj.pybullet_id)],
                 distance=0.005,
                 physicsClientId=robot.pybullet_id,
             )

@@ -76,15 +76,14 @@ class PrimitivePlanner():
             # for iters in range(1000):
             #     robot.setMotors(sparse_pose)
             #     p.stepSimulation()
-            print(sparse_pose)
+            # print(sparse_pose)
             robot.set_joints_without_memorize(sparse_pose)
-            print(cols)
+            # print(cols)
         input("Done...")
         robot.set_joints_without_memorize(robot.joint_vals)
 
     def pick(self, obj, pre_grasp_dist=0.02):
         robot = self.execution.scene.robot
-        print("***", self.motion_planner.robot == robot, "***")
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
         ## Grasp ##
         t0 = time.time()
@@ -101,15 +100,7 @@ class PrimitivePlanner():
         ]
 
         ## Set Collision Space ##
-        obs_msgs = []
-        # valid_objects = self.perception.obtain_unhidden_objects([], [1])
-        # print(valid_objects)
-        # for obs_id in self.perception.filtered_occluded_dict.keys():
-        for obs_id in self.execution.object_state_msg.keys():
-            # print(obs_id)
-            # print(self.execution.object_state_msg[str(obs_id)].name)
-            obs_msgs.append(self.execution.object_state_msg[str(obs_id)])
-        self.motion_planner.set_collision_env_with_models(obs_msgs)
+        self.set_collision_env_with_models()
 
         # pick poses
         for poseInfo in filteredPoses:
@@ -193,20 +184,23 @@ class PrimitivePlanner():
         self.motion_planner.detach_known(str(obj.pybullet_id))
         # self.motion_planner.scene_interface.remove_world_object("TEMP_ATTACHED")
 
+    def set_collision_env_with_models(self):
+        ## Set Collision Space ##
+        obs_msgs = []
+        # for obs_id in self.execution.object_state_msg.keys():
+        for obs in self.perception.objects.values():
+            obs_id = obs.pybullet_id
+            print(obs_id)
+            # print(self.execution.object_state_msg[str(obs_id)].name)
+            obs_msgs.append(self.execution.object_state_msg[str(obs_id)])
+        self.motion_planner.set_collision_env_with_models(obs_msgs)
+
     def place(self, obj, start_joint_dict, grasp_joint_dict, pre_place_dist=0.08):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
 
         ## Set Collision Space ##
-        obs_msgs = []
-        # valid_objects = self.perception.obtain_unhidden_objects([], [1])
-        # print(valid_objects)
-        # for obs_id in self.perception.filtered_occluded_dict.keys():
-        for obs_id in self.execution.object_state_msg.keys():
-            # print(obs_id)
-            # print(self.execution.object_state_msg[str(obs_id)].name)
-            obs_msgs.append(self.execution.object_state_msg[str(obs_id)])
-        self.motion_planner.set_collision_env_with_models(obs_msgs)
+        self.set_collision_env_with_models()
 
         ## Place ##
         max_iters = 100
@@ -217,14 +211,15 @@ class PrimitivePlanner():
             # sample placement postition
             t0 = time.time()
             sample_pos = obj_pose_generation.generate_random_placement(
-                obj_local_id,
+                obj,
                 robot,
+                self.execution,
                 self.perception,
                 self.scene.workspace,
             )
             t1 = time.time()
             print("Placement Sample Time: ", t1 - t0)
-            print(sample_pos)
+            # print(sample_pos)
 
             # get gripper to object matrix
             obj_transform = translation_quaternion2homogeneous(
@@ -234,9 +229,9 @@ class PrimitivePlanner():
             obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
 
             # get gripper transform at placement
-            print(obj_transform)
+            # print(obj_transform)
             obj_transform[:3, 3] = sample_pos
-            print(obj_transform)
+            # print(obj_transform)
             obj2gripper = np.linalg.inv(obj_rel_transform)
             gripper_transform = obj_transform.dot(obj2gripper)
             pos, rot = homogeneous2translation_quaternion(gripper_transform)
@@ -266,7 +261,7 @@ class PrimitivePlanner():
                 )
                 if len(contacts):
                     collisions.add(obj_pid)
-            print(collisions)
+            print("ik failed b/c of collisions:", collisions)
             if len(collisions) > 0:
                 robot.set_joints_without_memorize(robot.joint_vals)
                 continue
@@ -1163,7 +1158,8 @@ class PrimitivePlanner():
         self.motion_planning_time += time.time() - start_time
         # self.motion_planning_calls += 1
         print(
-            'handling object: ', self.perception.data_assoc.obj_ids_reverse[move_obj_idx]
+            'handling object: ',
+            self.perception.data_assoc.obj_ids_reverse[move_obj_idx],
         )
         start_time = time.time()
         _, suction_poses_in_obj, suction_joints = self.pre_move(

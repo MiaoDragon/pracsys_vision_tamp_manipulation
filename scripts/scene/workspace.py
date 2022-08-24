@@ -15,8 +15,8 @@ class Workspace():
         bbox_uls = {}
         transforms = {}
         for component_name, component in components.items():
-            print('component name: ')
-            print(component_name)
+            # print('component name: ')
+            # print(component_name)
             shape = component['shape']
             shape = np.array(shape)
             # pos = np.array(component['pose']['pos'])

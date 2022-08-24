@@ -15,6 +15,61 @@ geometric_suction_grasp_pose_generation = pose_generation.geometric_suction_gras
 geometric_gripper_grasp_pose_generation = pose_generation.geometric_gripper_grasp_pose_generation
 
 
+def free_space_grid(obj, robot, execution, perception, workspace):
+    obj_local_id = execution.object_local_id_dict[str(obj.pybullet_id)]
+    save_state = p.getBasePositionAndOrientation(
+        obj_local_id,
+        physicsClientId=robot.pybullet_id,
+    )
+
+    ws_low = workspace.region_low
+    ws_high = workspace.region_high
+
+    mins, maxs = p.getAABB(obj_local_id, physicsClientId=robot.pybullet_id)
+
+    # get coords for object placement
+    x_mid = (maxs[0] - mins[0]) / 2.0
+    y_mid = (maxs[1] - mins[1]) / 2.0
+    z_mid = (maxs[2] - mins[2]) / 2.0
+    z = z_mid + ws_low[2] + 0.001
+
+    # sense the scene
+    occlusion_label, occupied_label, occluded_list = perception.occlusion_label_t, perception.occupied_label_t, perception.occluded_list_t
+
+    # TODO find better kernel generation
+    obj_x, obj_y = np.where((occupied_label == obj.obj_id).any(2))
+    obj_x -= min(obj_x)
+    obj_y -= min(obj_y)
+    kernel = np.zeros((max(obj_x) + 1, max(obj_y) + 1)).astype('uint8')
+    kernel[obj_x, obj_y] = 1
+    print(f"{obj.obj_id}:")
+    print(kernel[:, :])
+
+    free_x, free_y = np.where(((occlusion_label <= 0) & (occupied_label == 0)).all(2))
+    shape = self.occlusion.occlusion.shape
+    img = 255 * np.ones(shape[0:2]).astype('uint8')
+    img[free_x, free_y] = 0
+    img[0, :] = 255
+    img[-1, :] = 255
+    img[:, 0] = 255
+    img[:, -1] = 255
+    cv2.imshow("Test0", img)
+    cv2.waitKey(0)
+    fimg = cv2.filter2D(img, -1, kernel)
+    cv2.imshow("Test1", fimg)
+    cv2.waitKey(0)
+    mink_x, mink_y = np.where(fimg == 0)
+    samples = list(
+        zip(
+            mink_x * self.occlusion.resol[0] + ws_low[0],
+            mink_y * self.occlusion.resol[1] + ws_low[1],
+            [z] * len(mink_x),
+        )
+    )
+    cv2.destroyAllWindows()
+    return samples
+
+
 def generate_random_placement(
     obj, robot, execution, perception, workspace, max_iters=1000
 ):

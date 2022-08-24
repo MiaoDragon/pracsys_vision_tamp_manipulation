@@ -325,7 +325,6 @@ class ExecutionSystem():
                     print('collision happened.')
 
             # update images and robot state
-            self.rgb_img, self.depth_img, self.seg_img = self.camera.sense()
             self.robot_state = self.robot.joint_dict
             if self.attached_obj_id is not None:
                 self.ee_transform = transform
@@ -333,8 +332,9 @@ class ExecutionSystem():
                     np.linalg.inv(self.attached_obj_pose)
                 )
 
-            rospy.sleep(0.000001)
+            rospy.sleep(0.0001)
 
+        self.rgb_img, self.depth_img, self.seg_img = self.camera.sense()
         # input('waiting...')
         # rospy.sleep(0.03)
         return ExecuteTrajectoryResponse(num_collision, True)

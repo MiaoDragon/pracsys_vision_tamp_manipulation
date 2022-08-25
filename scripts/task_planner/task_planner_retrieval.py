@@ -147,20 +147,22 @@ class TaskPlanner():
 
         ### Pick & Place Test ###
         print("* Pick & Place Test *")
-        pose_ind = input("Please Enter Object Id: ")
+        pose_ind = 'start'
         while pose_ind != 'q':
+            pose_ind = input("Please Enter Object Id: ")
             try:
                 obj_id = int(pose_ind)
                 obj = self.perception.objects[obj_id]
             except (IndexError, ValueError, KeyError):
-                pose_ind = input("Please Enter Object Id: ")
                 continue
 
             pick, pklift = self.planner.pick(obj)
+            if len(pick) == 0:
+                continue
             place, pclift = self.planner.place(obj, pklift[-1], pick[-1])
+            if len(place) == 0:
+                continue
             print("Execution!...")
-            print(pick[0])
-            print(self.execution.scene.robot.joint_dict)
             self.execution.detach_obj()
             self.execution.execute_traj(pick)
             self.execution.attach_obj(obj_id)
@@ -168,9 +170,6 @@ class TaskPlanner():
             self.execution.execute_traj(place)
             self.execution.detach_obj()
             self.execution.execute_traj(pclift)
-            print(self.execution.scene.robot.joint_dict)
-            print(pclift[-1])
-            pose_ind = input("Please Enter Object Id: ")
         ### Pick Test End ###
 
 

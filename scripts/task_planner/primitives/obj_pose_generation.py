@@ -1,13 +1,16 @@
 """
 provide helper functions for the primitives
 """
-from grasp_planner import pose_generation
 import numpy as np
-import transformations as tf
-import motion_planner.collision_check as collision_utils
 import pybullet as p
-from utils.visual_utils import *
 import open3d as o3d
+import transformations as tf
+from scipy.ndimage import rotate
+
+from utils.visual_utils import *
+from utils.transform_utils import *
+from grasp_planner import pose_generation
+import motion_planner.collision_check as collision_utils
 
 # relayed functions
 grasp_pose_generation = pose_generation.grasp_pose_generation
@@ -15,38 +18,76 @@ geometric_suction_grasp_pose_generation = pose_generation.geometric_suction_gras
 geometric_gripper_grasp_pose_generation = pose_generation.geometric_gripper_grasp_pose_generation
 
 
-def free_space_grid(obj, robot, execution, perception, workspace):
+def get_object_mask(
+    obj,
+    robot,
+    execution,
+    perception,
+    angle=None,
+    n_samples=12000,
+):
     obj_local_id = execution.object_local_id_dict[str(obj.pybullet_id)]
-    save_state = p.getBasePositionAndOrientation(
-        obj_local_id,
-        physicsClientId=robot.pybullet_id,
-    )
+    resol = perception.occlusion.resol
+    shape = p.getCollisionShapeData(obj_local_id, -1, robot.pybullet_id)[0]
+    if shape[2] == p.GEOM_BOX:
+        size_x = shape[3][0] / resol[0]
+        size_x = np.round(size_x, decimals=3)
+        size_x = int(np.ceil(size_x))
+        size_y = shape[3][1] / resol[1]
+        size_y = np.round(size_y, decimals=3)
+        size_y = int(np.ceil(size_y))
+        kernel = np.ones((size_x, size_y)).astype('uint8')
+        if angle is None:
+            angle = p.getEulerFromQuaternion(
+                p.getBasePositionAndOrientation(
+                    obj_local_id,
+                    physicsClientId=robot.pybullet_id,
+                )[1]  # get rotation quaternion
+            )[2]  # get angle around z axis
+            angle *= 180 / np.pi
+        kernel = rotate(kernel, angle, order=1)
+    elif shape[2] in (p.GEOM_CYLINDER, p.GEOM_CAPSULE):
+        size_r = shape[3][1] / resol[0]
+        size_r = np.round(size_r, decimals=3)
+        size_r = int(np.ceil(size_r))
+        xx, yy = np.mgrid[:size_r * 2 + 1, :size_r * 2 + 1]
+        circle = (xx - size_r)**2 + (yy - size_r)**2
+        disk = circle <= (size_r**2)
+        kernel = disk.astype('uint8')
+    else:
+        # bounding box if we don't know shape
+        mins, maxs = p.getAABB(obj_local_id, physicsClientId=robot.pybullet_id)
+        size_x = (maxs[0] - mins[0]) / resol[0]
+        size_x = np.round(size_x, decimals=3)
+        size_x = int(np.ceil(size_x))
+        size_y = (maxs[1] - mins[1]) / resol[1]
+        size_y = np.round(size_y, decimals=3)
+        size_y = int(np.ceil(size_y))
+        kernel = np.ones((size_x, size_y)).astype('uint8')
+    return kernel
+
+
+def generate_placements(obj, robot, execution, perception, workspace):
+    obj_local_id = execution.object_local_id_dict[str(obj.pybullet_id)]
+    resol = perception.occlusion.resol
+    occlusion_label, occupied_label, occluded_list = perception.occlusion_label_t, perception.occupied_label_t, perception.occluded_t
 
     ws_low = workspace.region_low
     ws_high = workspace.region_high
 
     mins, maxs = p.getAABB(obj_local_id, physicsClientId=robot.pybullet_id)
 
-    # get coords for object placement
-    x_mid = (maxs[0] - mins[0]) / 2.0
-    y_mid = (maxs[1] - mins[1]) / 2.0
+    # get z coord for object placement
     z_mid = (maxs[2] - mins[2]) / 2.0
-    z = z_mid + ws_low[2] + 0.001
+    z = z_mid + ws_low[2] + 0.003
 
-    # sense the scene
-    occlusion_label, occupied_label, occluded_list = perception.occlusion_label_t, perception.occupied_label_t, perception.occluded_list_t
-
-    # TODO find better kernel generation
-    obj_x, obj_y = np.where((occupied_label == obj.obj_id).any(2))
-    obj_x -= min(obj_x)
-    obj_y -= min(obj_y)
-    kernel = np.zeros((max(obj_x) + 1, max(obj_y) + 1)).astype('uint8')
-    kernel[obj_x, obj_y] = 1
+    # generate kernel for collision mask
+    kernel = get_object_mask(obj, robot, execution, perception)
     print(f"{obj.obj_id}:")
     print(kernel[:, :])
 
     free_x, free_y = np.where(((occlusion_label <= 0) & (occupied_label == 0)).all(2))
-    shape = self.occlusion.occlusion.shape
+    shape = perception.occlusion.occlusion.shape
     img = 255 * np.ones(shape[0:2]).astype('uint8')
     img[free_x, free_y] = 0
     img[0, :] = 255
@@ -61,8 +102,8 @@ def free_space_grid(obj, robot, execution, perception, workspace):
     mink_x, mink_y = np.where(fimg == 0)
     samples = list(
         zip(
-            mink_x * self.occlusion.resol[0] + ws_low[0],
-            mink_y * self.occlusion.resol[1] + ws_low[1],
+            mink_x * resol[0] + ws_low[0],
+            mink_y * resol[1] + ws_low[1],
             [z] * len(mink_x),
         )
     )

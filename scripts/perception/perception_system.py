@@ -29,7 +29,7 @@ class PerceptionSystem():
         self.sensed_poses = []
         self.filtered_occluded = None
         self.filtered_occlusion_label = None
-        
+
         # self.table_z = self.occlusion.z_base
         # self.filtered_occupied_label = filtered_occupied_label
         self.filtered_occluded_dict = None
@@ -37,14 +37,14 @@ class PerceptionSystem():
         self.data_assoc = GroundTruthDataAssociation()
         self.segmentation = GroundTruthSegmentation()
         self.tsdf_color_flag = tsdf_color_flag
-        
+
     def perceive(self, depth_img, color_img, seg_img, sensed_obj_ids, obj_hide_sets, camera_extrinsics, camera_intrinsics, camera_far, robot_ids, workspace_ids,
                  visualize=False):
         """
-        given depth img and color img from camera, and segmented and labeld images from 
+        given depth img and color img from camera, and segmented and labeld images from
         Segmentation and Data Association, update occlusion and object model
-        
-        Object model: 
+
+        Object model:
         for sensed ones, use the segmented depth image to update model
         for new ones, create a new entry in the object list
 
@@ -84,7 +84,7 @@ class PerceptionSystem():
             for obj_id_ in sensed_obj_ids:
                 if obj_id_ == obj_id:
                     continue
-                seg_depth_img[seg_img==obj_id_] = camera_far            
+                seg_depth_img[seg_img==obj_id_] = camera_far
 
             # NOTE: problem. When the object that is being grasped is hiding the object behind,
             # this will cause the object to be seen-through
@@ -120,7 +120,7 @@ class PerceptionSystem():
                 voxel_z_min = voxel_z_min * self.occlusion.resol[2]
                 voxel_min = np.array([voxel_x_min,voxel_y_min,voxel_z_min])
                 voxel_min = self.occlusion.transform[:3,:3].dot(voxel_min).T + self.occlusion.transform[:3,3]
-                
+
 
                 voxel_x_max = self.occlusion.voxel_x[occluded].reshape(-1)+np.ceil(self.object_params['scale']/self.object_params['resol'][0])+1
                 voxel_y_max = self.occlusion.voxel_y[occluded].reshape(-1)+np.ceil(self.object_params['scale']/self.object_params['resol'][1])+1
@@ -153,7 +153,7 @@ class PerceptionSystem():
                 new_object = ObjectBelief(obj_id, self.data_assoc.obj_ids_reverse[obj_id], xmin, ymin, zmin, xmax, ymax, zmax, self.object_params['resol'], self.object_params['scale'], use_color=self.tsdf_color_flag)
                 self.objects[obj_id] = new_object
                 self.obj_initial_poses[obj_id] = new_object.transform
-                            
+
             # expand the model if inactive
             if not self.objects[obj_id].active:
                 self.objects[obj_id].expand_model(xmin, ymin, zmin, xmax, ymax, zmax)
@@ -201,7 +201,8 @@ class PerceptionSystem():
         obj_opt_pcds = {}
         obj_poses = {}
         for obj_id, obj in self.objects.items():
-            pcd = obj.sample_conservative_pcd(n_sample=10)  # for checking occupied space, use conservative volume
+            # for checking occupied space, use conservative volume
+            pcd = obj.sample_conservative_pcd(n_sample=10)
             opt_pcd = obj.sample_optimistic_pcd(n_sample=10)
             obj_poses[obj_id] = obj.transform
             obj_pcds[obj_id] = pcd
@@ -223,6 +224,7 @@ class PerceptionSystem():
         self.occupied_label_t = occupied_label
         self.occupied_dict_t = occupied_dict
         self.occluded_dict_t = occluded_dict
+        print("*** labels written ***")
 
 
         if LOG:
@@ -239,12 +241,12 @@ class PerceptionSystem():
 
         filtered_occluded, filtered_occlusion_label, filtered_occluded_dict = \
             self.filtering(camera_extrinsics, camera_intrinsics)
-        
+
         self.filtered_occluded = filtered_occluded
         self.filtered_occlusion_label = filtered_occlusion_label
         # self.filtered_occupied_label = filtered_occupied_label
         self.filtered_occluded_dict = filtered_occluded_dict
-        
+
 
         del occluded
         del occlusion_label
@@ -259,7 +261,7 @@ class PerceptionSystem():
 
         if len(sensed_obj_ids) > 0:
             del seg_depth_img
-        
+
     def filtering(self, camera_extrinsics, camera_intrinsics):
         """
         since we remove each object and sense at each time, recording the list of past sensed depth images
@@ -278,17 +280,17 @@ class PerceptionSystem():
             obj_conserv_pcds[obj_id] = self.objects[obj_id].sample_conservative_pcd(n_sample=10)
 
         net_occluded = self.filtered_occluded
-        
+
         for i in range(len(self.sensed_imgs)):
             depth_img = self.sensed_imgs[i]
             occluded = self.occlusion.scene_occlusion(depth_img, None, camera_extrinsics, camera_intrinsics)
-    
+
             for obj_id, obj_pose in self.sensed_poses[i].items():
                 obj_poses[obj_id] = obj_pose
             occlusion_label, occupied_label, occluded_dict, _ = \
                     self.occlusion.label_scene_occlusion(occluded, camera_extrinsics, camera_intrinsics, depth_img.shape,
                                                         obj_poses, obj_conserv_pcds, obj_opt_pcds)
-        
+
 
             opt_occupied_dict = self.occlusion.obtain_object_occupancy(camera_extrinsics, camera_intrinsics, obj_poses, obj_opt_pcds)
 
@@ -315,16 +317,16 @@ class PerceptionSystem():
                              (pcd[:,2] >= 0) & (pcd[:,2] < self.occlusion.voxel_x.shape[2])
                 occupied_mask = (opt_occupied_label[pcd[valid_mask][:,0],pcd[valid_mask][:,1],pcd[valid_mask][:,2]]>0) & \
                                 ((opt_occupied_label[pcd[valid_mask][:,0],pcd[valid_mask][:,1],pcd[valid_mask][:,2]]!=obj_id+1)).reshape(-1)
-                
+
 
                 obj.tsdf[ori_pcd[valid_mask][occupied_mask][:,0],ori_pcd[valid_mask][occupied_mask][:,1],ori_pcd[valid_mask][occupied_mask][:,2]] = obj.max_v * 1.1
                 obj.tsdf_count[ori_pcd[valid_mask][occupied_mask][:,0],ori_pcd[valid_mask][occupied_mask][:,1],ori_pcd[valid_mask][occupied_mask][:,2]] += 10
-            
+
             if net_occluded is None:
                 net_occluded = occlusion_label != 0 #occlusion_label > 0
             else:
                 net_occluded = net_occluded & (occlusion_label!=0)#(occlusion_label>0)
-        
+
         # obtain occlusion for each of the object
         new_occlusion_label = np.zeros(occlusion_label.shape).astype(int)
         for obj_id, obj_occlusion in occluded_dict.items():
@@ -344,7 +346,7 @@ class PerceptionSystem():
         return net_occluded, new_occlusion_label, occluded_dict
 
 
-    def update_obj_model(self, obj_id, depth_img, color_img, seg_img, sensed_obj_ids, 
+    def update_obj_model(self, obj_id, depth_img, color_img, seg_img, sensed_obj_ids,
                         camera_extrinsics, camera_intrinsics, camera_far, robot_ids, workspace_ids):
         seg_depth_img = np.array(depth_img)
         seg_depth_img[seg_img!=obj_id] = camera_far  #0  # UPDATE: other regions should correspond to max depth value since it's free space
@@ -359,7 +361,7 @@ class PerceptionSystem():
     def pipeline_sim(self, color_img, depth_img, seg_img, camera, robot_ids, workspace_ids):
         """
         given the camera input, segment the image, and data association
-        """    
+        """
         # color_img, depth_img, seg_img = camera.sense()
 
         # visualzie segmentation image
@@ -387,13 +389,13 @@ class PerceptionSystem():
         # objects that have been revealed will stay revealed
 
         valid_objects = self.obtain_unhidden_objects(robot_ids, workspace_ids)
-        
+
         object_hide_set = self.obtain_object_hide_set(robot_ids, workspace_ids)
 
         self.current_hide_set = object_hide_set
-        self.perceive(depth_img, color_img, seg_img, 
-                    sensed_obj_ids, object_hide_set, 
-                    camera.info['extrinsics'], camera.info['intrinsics'], camera.info['far'], 
+        self.perceive(depth_img, color_img, seg_img,
+                    sensed_obj_ids, object_hide_set,
+                    camera.info['extrinsics'], camera.info['intrinsics'], camera.info['far'],
                     robot_ids, workspace_ids)
 
         # update each object's hide set
@@ -408,10 +410,10 @@ class PerceptionSystem():
         self.segmentation.set_ground_truth_seg_img(seg_img)
         seg_img = self.segmentation.segment_img(color_img, depth_img)
         assoc, seg_img, sensed_obj_ids = self.data_assoc.data_association(seg_img, robot_ids, workspace_ids)
-        
-        self.update_obj_model(obj_id, depth_img, color_img, seg_img, sensed_obj_ids, 
+
+        self.update_obj_model(obj_id, depth_img, color_img, seg_img, sensed_obj_ids,
                                           camera.info['extrinsics'], camera.info['intrinsics'], camera.info['far'], robot_ids, workspace_ids)
-    
+
 
     def obtain_object_hide_set(self, robot_ids, workspace_ids):
         depth_img = self.depth_img
@@ -447,7 +449,7 @@ class PerceptionSystem():
             img_i, img_j = np.indices(seg_img.shape)
             # check if the neighbor object is hiding this object
             valid_1 = (img_i-1>=0) & (seg_img==obj_id)
-            # the neighbor object should be 
+            # the neighbor object should be
             # 1. an object (can be robot)
             # 2. not the current object
             filter1 = obj_seg_filter[img_i[valid_1]-1,img_j[valid_1]]
@@ -506,7 +508,7 @@ class PerceptionSystem():
             hiding_objs[obj_id] = hiding_set
 
         return hiding_objs
-            
+
 
     def obtain_unhidden_objects(self, robot_ids, workspace_ids):
 
@@ -540,7 +542,7 @@ class PerceptionSystem():
             img_i, img_j = np.indices(seg_img.shape)
             # check if the neighbor object is hiding this object
             valid_1 = (img_i-1>=0) & (seg_img==obj_id)
-            # the neighbor object should be 
+            # the neighbor object should be
             # 1. an object (can be robot)
             # 2. not the current object
             filter1 = obj_seg_filter[img_i[valid_1]-1,img_j[valid_1]]
@@ -584,10 +586,10 @@ class PerceptionSystem():
 
 
         return valid_objects
-    
+
     def label_obj_seg_img(self):
         """
-        label the object segmented image so that 
+        label the object segmented image so that
         """
         pass
 

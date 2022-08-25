@@ -51,6 +51,9 @@ class PrimitivePlanner():
         self.num_executed_actions = 0
         self.num_collision = 0
 
+    def TryMoveOne(self, objects):
+        pass
+
     def grasp_test(self, obj):
         # robot = self.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
@@ -202,24 +205,39 @@ class PrimitivePlanner():
         ## Set Collision Space ##
         self.set_collision_env_with_models()
 
-        ## Place ##
-        max_iters = 100
-        count = 0
-        while count < max_iters:
-            count += 1
+        # print("Equal?", self.perception == self.execution.perception)
+        t0 = time.time()
+        placements = obj_pose_generation.generate_placements(
+            obj,
+            robot,
+            self.execution,
+            self.perception,
+            self.scene.workspace,
+        )
+        t1 = time.time()
+        print("Placement Sample Time: ", t1 - t0)
 
-            # sample placement postition
-            t0 = time.time()
-            sample_pos = obj_pose_generation.generate_random_placement(
-                obj,
-                robot,
-                self.execution,
-                self.perception,
-                self.scene.workspace,
-            )
-            t1 = time.time()
-            print("Placement Sample Time: ", t1 - t0)
-            # print(sample_pos)
+        ## Place ##
+
+        ## random version ##
+        # max_iters = 100
+        # count = 0
+        # while count < max_iters:
+        #     count += 1
+
+        #     # sample placement postition
+        #     t0 = time.time()
+        #     sample_pos = obj_pose_generation.generate_random_placement(
+        #         obj,
+        #         robot,
+        #         self.execution,
+        #         self.perception,
+        #         self.scene.workspace,
+        #     )
+        #     t1 = time.time()
+        #     print("Placement Sample Time: ", t1 - t0)
+        for sample_pos in reversed(placements):
+            print(sample_pos)
 
             # get gripper to object matrix
             obj_transform = translation_quaternion2homogeneous(

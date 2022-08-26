@@ -1221,12 +1221,12 @@ def load_problem_level(
             color = [1, 1, 1, 1]
         x_size, y_size, z_size = obj_sizes[i]
 
-        if np.round(z_size, 2) == 0.06:
-            z_size = height_scale[0]
-        elif np.round(z_size, 2) == 0.10:
-            z_size = height_scale[1]
-        elif np.round(z_size, 2) == 0.14:
-            z_size = height_scale[2]
+        # if np.round(z_size, 2) == 0.06:
+        #     z_size = height_scale[0]
+        # elif np.round(z_size, 2) == 0.10:
+        #     z_size = height_scale[1]
+        # elif np.round(z_size, 2) == 0.14:
+        #     z_size = height_scale[2]
 
         x, y, z = obj_poses[i][:3, 3]
         z_offset = 0.001

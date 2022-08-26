@@ -66,3 +66,7 @@ def translation_quaternion2homogeneous(pos, quat):
 
 def sgn(x):
     return x / abs(x)
+
+
+def add2dict(d, k, v):
+    d[k] = d.get(k, type(v)()) + v

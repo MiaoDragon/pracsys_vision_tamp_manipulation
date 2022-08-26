@@ -332,7 +332,7 @@ class ExecutionSystem():
                     np.linalg.inv(self.attached_obj_pose)
                 )
 
-            rospy.sleep(0.001)
+            rospy.sleep(0.01)
 
         self.rgb_img, self.depth_img, self.seg_img = self.camera.sense()
         # input('waiting...')

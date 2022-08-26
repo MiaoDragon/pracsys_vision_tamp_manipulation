@@ -1,6 +1,8 @@
 """
 provide helper functions for the primitives
 """
+
+import cv2
 import numpy as np
 import pybullet as p
 import open3d as o3d
@@ -67,7 +69,7 @@ def get_object_mask(
     return kernel
 
 
-def generate_placements(obj, robot, execution, perception, workspace):
+def generate_placements(obj, robot, execution, perception, workspace, display=False):
     obj_local_id = execution.object_local_id_dict[str(obj.pybullet_id)]
     resol = perception.occlusion.resol
     occlusion_label, occupied_label, occluded_list = perception.occlusion_label_t, perception.occupied_label_t, perception.occluded_t
@@ -94,11 +96,13 @@ def generate_placements(obj, robot, execution, perception, workspace):
     img[-1, :] = 255
     img[:, 0] = 255
     img[:, -1] = 255
-    cv2.imshow("Test0", img)
-    cv2.waitKey(0)
+    if display:
+        cv2.imshow("Test0", img)
+        cv2.waitKey(0)
     fimg = cv2.filter2D(img, -1, kernel)
-    cv2.imshow("Test1", fimg)
-    cv2.waitKey(0)
+    if display:
+        cv2.imshow("Test1", fimg)
+        cv2.waitKey(0)
     mink_x, mink_y = np.where(fimg == 0)
     samples = list(
         zip(
@@ -107,7 +111,8 @@ def generate_placements(obj, robot, execution, perception, workspace):
             [z] * len(mink_x),
         )
     )
-    cv2.destroyAllWindows()
+    if display:
+        cv2.destroyAllWindows()
     return samples
 
 
@@ -765,9 +770,6 @@ def obtain_straight_blocking_mask(target_obj, occlusion):
     del valid_filter
 
     return blocking_mask
-
-
-import cv2
 
 
 def obtain_visibility_blocking_mask(target_obj, camera, occlusion):

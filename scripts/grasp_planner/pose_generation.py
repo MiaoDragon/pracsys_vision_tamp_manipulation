@@ -66,38 +66,11 @@ def geometric_suction_grasp_pose_generation(
     # obj_pos_in, obj_rot_in = p.invertTransform(obj_pos, obj_rot)
     # gw = robot.right_flim[1] * 2  # gripper width
 
-    def nearOdd(n):
-        return round((n - 1) / 2) * 2 + 1
-
     # positions along shape
     grasps = []
     if shape[2] == p.GEOM_BOX:
         sx, sy, sz = shape[3]
 
-        # top = [0, 0, sz / 2]
-        # left = [0, -sy / 2, 0]
-        # right = [0, sy / 2, 0]
-        # front = [-sx / 2, 0, 0]
-        # if sx < gw:
-        #     noz = nearOdd(sz / (gw * 1.5))
-        #     for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
-        #         grasps.append([[0, sy / 2, z * sz], horz[3]])  # right
-        #         grasps.append([[0, sy / 2, z * sz], horz[9]])  # right
-        #         grasps.append([[0, -sy / 2, z * sz], horz[5]])  # left
-        #         grasps.append([[0, -sy / 2, z * sz], horz[11]])  # left
-        #     noy = nearOdd(sy / gw)
-        #     for y in np.linspace(-(noy - 1) / (2 * noy), (noy - 1) / (2 * noy), noy):
-        #         grasps.append([[0, y * sy, sz / 2], vert[1]])  # top
-        #         grasps.append([[0, y * sy, sz / 2], vert[3]])  # top
-        # if sy < gw:
-        #     noz = nearOdd(sz / gw)
-        #     for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
-        #         grasps.append([[-sx / 2, 0, z * sz], horz[4]])  # front
-        #         grasps.append([[-sx / 2, 0, z * sz], horz[10]])  # front
-        #     nox = nearOdd(sx / gw)
-        #     for x in np.linspace(-(nox - 1) / (2 * nox), (nox - 1) / (2 * nox), nox):
-        #         grasps.append([[x * sx, 0, sz / 2], vert[0]])  # top
-        #         grasps.append([[x * sx, 0, sz / 2], vert[2]])  # top
         for z in np.linspace(-0.3, 0.3, res):
             for y in np.linspace(-0.3, 0.3, res):
                 grasps.append([[-sx / 2, y * sy, z * sz], horz[4]])  # front
@@ -106,8 +79,6 @@ def geometric_suction_grasp_pose_generation(
         # offset1 = (offset1[0], offset1[1], offset1[2] + gw * 0.75)
     elif shape[2] == p.GEOM_CYLINDER or shape[2] == p.GEOM_CAPSULE:
         h, r = shape[3][:2]
-        # noz = nearOdd(h / (gw))
-        # for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
         for z in np.linspace(-0.3, 0.3, res):
             # grasps += [[(0, 0, z * h), o] for o in vert]
             grasps += [
@@ -277,9 +248,6 @@ def geometric_gripper_grasp_pose_generation(
     # obj_pos_in, obj_rot_in = p.invertTransform(obj_pos, obj_rot)
     gw = robot.gripper_width  # gripper width
 
-    def nearOdd(n):
-        return round((n - 1) / 2) * 2 + 1
-
     # positions along shape
     grasps = []
     if shape[2] == p.GEOM_BOX:
@@ -290,26 +258,18 @@ def geometric_gripper_grasp_pose_generation(
         # right = [0, sy / 2, 0]
         # front = [-sx / 2, 0, 0]
         if sx < gw:
-            noz = nearOdd(sz / (gw * 1.5))
-            # for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
             for z in np.linspace(-0.1, 0.3, res):
                 grasps.append([[0, sy / 2, z * sz], horz[3]])  # right
                 grasps.append([[0, sy / 2, z * sz], horz[9]])  # right
                 grasps.append([[0, -sy / 2, z * sz], horz[5]])  # left
                 grasps.append([[0, -sy / 2, z * sz], horz[11]])  # left
-            noy = nearOdd(sy / gw)
-            # for y in np.linspace(-(noy - 1) / (2 * noy), (noy - 1) / (2 * noy), noy):
             for y in np.linspace(-0.2, 0.2, res):
                 grasps.append([[0, y * sy, sz / 2], vert[1]])  # top
                 grasps.append([[0, y * sy, sz / 2], vert[3]])  # top
         if sy < gw:
-            noz = nearOdd(sz / gw)
-            # for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
             for z in np.linspace(-0.1, 0.3, res):
                 grasps.append([[-sx / 2, 0, z * sz], horz[4]])  # front
                 grasps.append([[-sx / 2, 0, z * sz], horz[10]])  # front
-            nox = nearOdd(sx / gw)
-            # for x in np.linspace(-(nox - 1) / (2 * nox), (nox - 1) / (2 * nox), nox):
             for x in np.linspace(-0.2, 0.2, res):
                 grasps.append([[x * sx, 0, sz / 2], vert[0]])  # top
                 grasps.append([[x * sx, 0, sz / 2], vert[2]])  # top
@@ -317,8 +277,6 @@ def geometric_gripper_grasp_pose_generation(
         offset1 = (offset1[0], offset1[1], offset1[2] + gw * 0.5)
     elif shape[2] == p.GEOM_CYLINDER or shape[2] == p.GEOM_CAPSULE:
         h, r = shape[3][:2]
-        noz = nearOdd(h / (gw))
-        # for z in np.linspace(-(noz - 1) / (2 * noz), (noz - 1) / (2 * noz), noz):
         for z in np.linspace(0.0, 0.3, hres):
             grasps += [[(0, 0, z * h), o] for o in vert]
         for z in np.linspace(-0.1, 0.3, hres):
@@ -361,14 +319,13 @@ def geometric_gripper_grasp_pose_generation(
         tpos2, trot2 = p.multiplyTransforms(obj_pos, obj_rot, pos2, rot2)
         pose1 = [tpos1, trot1]
         pose2 = [tpos2, trot2]
-        poses.append([pose1, pose2])
+        poses.append([pose1, pose2, rot])
 
     endEffectorId = robot.tip_link_name
-    grasps = poses
 
     # init_states = robot.joint_vals
     filteredJointPoses = []
-    for pose1, pose2 in grasps:
+    for pose1, pose2, lrot in poses:
         pos1, rot1 = pose1
         pos2, rot2 = pose2
         # self.set_joints(self.nuetral_joints)
@@ -414,13 +371,25 @@ def geometric_gripper_grasp_pose_generation(
             if not collisions.intersection([1]):
                 filteredJointPoses.append(
                     {
-                        'all_joints': joint_states,
-                        'dof_joints': jointPoses,
-                        'dof_joints_offset': jointPoses2,
-                        'eof_pose': list(pos1) + list(rot1),
-                        'eof_pose_offset': list(pos2) + list(rot2),
-                        'collisions': collisions,
-                        # 'dist': dist
+                        'all_joints':
+                        joint_states,
+                        'dof_joints':
+                        jointPoses,
+                        'dof_joints_offset':
+                        jointPoses2,
+                        'eof_pose':
+                        list(pos1) + list(rot1),
+                        'eof_pose_offset':
+                        list(pos2) + list(rot2),
+                        'collisions':
+                        collisions,
+                        'heuristic':
+                        p.multiplyTransforms(
+                            (0, 0, 0),
+                            lrot,
+                            (0, 0, 1),
+                            (0, 0, 0, 1),
+                        )[0][2]
                     }
                 )
 
@@ -432,7 +401,7 @@ def geometric_gripper_grasp_pose_generation(
         # filteredJointPoses,
         # key=lambda x: (len(x['collisions']), x['dist']),
         filteredJointPoses,
-        key=lambda x: len(x['collisions'])
+        key=lambda x: (len(x['collisions']), x['heuristic'])
     )
     return filteredJointPoses
 

@@ -5,25 +5,24 @@ Since the task planner does not deal with details of implementations, an
 abstract search process can proceed which can generate a skeleton of the
 task, later to be verified by lower-level the primitive planner.
 """
+import os
+import gc
 import sys
+import time
+import json
 
-# import rearrangement_plan
-from utils.visual_utils import *
-
+import cv2
+import rospy
+import rospkg
 import numpy as np
 import transformations as tf
 import matplotlib.pyplot as plt
-import time
-import gc
-import cv2
-import rospy
 
-import json
+from utils.visual_utils import *
 from scene.sim_scene import SimScene
 from perception.perception_system import PerceptionSystem
 from primitives.primitive_planner import PrimitivePlanner
 from primitives.execution_interface import ExecutionInterface
-import rospkg, os
 
 
 class TaskPlanner():
@@ -96,7 +95,7 @@ class TaskPlanner():
         self.execution_calls = 0
         self.rearrange_calls = 0
 
-        # self.pipeline_sim()
+        self.pipeline_sim()
         input('press to start...')
         self.num_executed_actions = 0
         self.num_collision = 0
@@ -156,20 +155,36 @@ class TaskPlanner():
             except (IndexError, ValueError, KeyError):
                 continue
 
-            pick, pklift = self.planner.pick(obj)
-            if len(pick) == 0:
-                continue
-            place, pclift = self.planner.place(obj, pklift[-1], pick[-1])
-            if len(place) == 0:
-                continue
-            print("Execution!...")
-            self.execution.detach_obj()
-            self.execution.execute_traj(pick)
-            self.execution.attach_obj(obj_id)
-            self.execution.execute_traj(pklift)
-            self.execution.execute_traj(place)
-            self.execution.detach_obj()
-            self.execution.execute_traj(pclift)
+            # self.pipeline_sim()
+            # self.perception.pipeline_sim(
+            #     self.execution.color_img,
+            #     self.execution.depth_img,
+            #     self.execution.seg_img,
+            #     self.execution.scene.camera,
+            #     [self.execution.scene.robot.robot_id],
+            #     self.execution.scene.workspace.component_ids,
+            # )
+            time_info = self.planner.TryMoveOneObject(obj)
+            print("\n\nDone:")
+            for tt, tm in time_info.items():
+                if type(tm) == list:
+                    print(f'{tt}: avg={np.average(tm)} std={np.std(tm)} num={len(tm)}')
+                else:
+                    print(f'{tt}: {tm}')
+            # pick, pklift = self.planner.pick(obj)
+            # if len(pick) == 0:
+            #     continue
+            # place, pclift = self.planner.place(obj, pklift[-1], pick[-1])
+            # if len(place) == 0:
+            #     continue
+            # print("Execution!...")
+            # self.execution.detach_obj()
+            # self.execution.execute_traj(pick)
+            # self.execution.attach_obj(obj_id)
+            # self.execution.execute_traj(pklift)
+            # self.execution.execute_traj(place)
+            # self.execution.detach_obj()
+            # self.execution.execute_traj(pclift)
         ### Pick Test End ###
 
 

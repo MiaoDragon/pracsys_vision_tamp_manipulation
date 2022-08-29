@@ -1,7 +1,7 @@
 """
 associate the segmented image with perceived model.
 If not found in the model list, then create a new model
-{seg_id: obj_id}
+{pybullet_id: obj_id}
 if new object found, add one to the obj_id
 """
 import numpy as np

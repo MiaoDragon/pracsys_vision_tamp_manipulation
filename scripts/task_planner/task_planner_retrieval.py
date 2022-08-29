@@ -114,62 +114,6 @@ class TaskPlanner():
             workspace_doc = Workspace()
         # comment out above during execution
 
-        start_time = time.time()
-
-        # self.pipeline_sim()
-        for obj_id, obj in self.perception.objects.items():
-            local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
-            print(obj_id, local_id)  #, obj.pybullet_id, local_id)
-            print(
-                p.getCollisionShapeData(
-                    local_id,
-                    -1,
-                    physicsClientId=self.execution.scene.robot.pybullet_id,
-                )
-            )
-
-        print(self.execution.object_local_id_dict)
-        print(self.perception.data_assoc.obj_ids_reverse)
-        local2perception = {
-            v: self.perception.data_assoc.obj_ids.get(int(k), -1)
-            for k, v in self.execution.object_local_id_dict.items()
-        }
-        print(local2perception)
-        pybullet_id = self.execution.scene.robot.pybullet_id
-        for i in range(2, p.getNumBodies(physicsClientId=pybullet_id)):
-            obj_i = p.getBodyUniqueId(i, physicsClientId=pybullet_id)
-            for j in range(i + 1, p.getNumBodies(physicsClientId=pybullet_id)):
-                obj_j = p.getBodyUniqueId(j, physicsClientId=pybullet_id)
-                contacts = p.getClosestPoints(
-                    obj_i,
-                    obj_j,
-                    distance=0.002,
-                    physicsClientId=pybullet_id,
-                )
-                if contacts:
-                    print(
-                        local2perception[obj_i],
-                        local2perception[obj_j],
-                        [contacts[0][x] for x in (1, 2, 5, 6, 7)],
-                    )
-        ### TODO: use contacts[7][2] = 1 => 2 below 1
-        ### TODO: use contacts[7][2] = -1 => 1 below 2
-
-        ### Grasp Sampling Test ###
-        print("* Grasp Test *")
-        pose_ind = input("Please Enter Object Id: ")
-        while pose_ind != 'q':
-            try:
-                obj_id = int(pose_ind)
-                obj = self.perception.objects[obj_id]
-            except (IndexError, ValueError, KeyError):
-                pose_ind = input("Please Enter Object Id: ")
-                continue
-
-            self.planner.grasp_test(obj)
-            pose_ind = input("Please Enter Object Id: ")
-        ### Grasp Sampling Test End ###
-
         ### Pick & Place Test ###
         print("* Pick & Place Test *")
         pose_ind = 'start'
@@ -181,36 +125,10 @@ class TaskPlanner():
             except (IndexError, ValueError, KeyError):
                 continue
 
-            # self.pipeline_sim()
-            # self.perception.pipeline_sim(
-            #     self.execution.color_img,
-            #     self.execution.depth_img,
-            #     self.execution.seg_img,
-            #     self.execution.scene.camera,
-            #     [self.execution.scene.robot.robot_id],
-            #     self.execution.scene.workspace.component_ids,
-            # )
             time_info = self.planner.TryMoveOneObject(obj)
             print("\n\nDone:")
-            for tt, tm in time_info.items():
-                if type(tm) == list:
-                    print(f'{tt}: avg={np.average(tm)} std={np.std(tm)} num={len(tm)}')
-                else:
-                    print(f'{tt}: {tm}')
-            # pick, pklift = self.planner.pick(obj)
-            # if len(pick) == 0:
-            #     continue
-            # place, pclift = self.planner.place(obj, pklift[-1], pick[-1])
-            # if len(place) == 0:
-            #     continue
-            # print("Execution!...")
-            # self.execution.detach_obj()
-            # self.execution.execute_traj(pick)
-            # self.execution.attach_obj(obj_id)
-            # self.execution.execute_traj(pklift)
-            # self.execution.execute_traj(place)
-            # self.execution.detach_obj()
-            # self.execution.execute_traj(pclift)
+            self.pipeline_sim()
+
         ### Pick Test End ###
 
 

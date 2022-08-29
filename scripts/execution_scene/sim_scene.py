@@ -13,11 +13,11 @@ import rospkg
 from cv_bridge import CvBridge
 from std_msgs.msg import Int32
 from geometry_msgs.msg import Point
-from moveit_commander.conversions import *
+# from moveit_commander.conversions import *
 from sensor_msgs.msg import Image, JointState
 from shape_msgs.msg import SolidPrimitive, Mesh, MeshTriangle
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-
+from geometry_msgs.msg import Pose
 # import problem_generation as prob_gen
 import problem_generation as prob_gen
 from utils.visual_utils import *

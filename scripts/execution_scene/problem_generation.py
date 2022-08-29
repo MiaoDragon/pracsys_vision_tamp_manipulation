@@ -43,7 +43,7 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
     scene_dict = json.load(f)
 
     rp = rospkg.RosPack()
-    package_path = rp.get_path('vbcpm_execution_system')
+    package_path = rp.get_path('pracsys_ctvmp')
     urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
     # joints = [0.] * 16
 
@@ -1156,7 +1156,7 @@ def load_problem_level(
     scene_dict = json.load(f)
 
     rp = rospkg.RosPack()
-    package_path = rp.get_path('vbcpm_execution_system')
+    package_path = rp.get_path('pracsys_ctvmp')
     urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
     # joints = [0.] * 16
 

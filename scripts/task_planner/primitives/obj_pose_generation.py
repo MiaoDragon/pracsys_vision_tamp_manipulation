@@ -90,7 +90,8 @@ def generate_placements(obj, robot, execution, perception, workspace, display=Fa
     print(f"{obj.obj_id}:")
     print(kernel[:, :])
 
-    free_x, free_y = np.where(((occlusion_label <= 0) & (occupied_label == 0)).all(2))
+    # free_x, free_y = np.where(((occlusion_label <= 0) & (occupied_label == 0)).all(2))
+    free_x, free_y = np.where((occlusion_label <= 0).all(2))
     shape = perception.occlusion.occlusion.shape
     img = 255 * np.ones(shape[0:2]).astype('uint8')
     img[free_x, free_y] = 0

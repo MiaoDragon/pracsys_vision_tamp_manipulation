@@ -18,6 +18,7 @@ import numpy as np
 import transformations as tf
 import matplotlib.pyplot as plt
 
+from dep_graph import DepGraph
 from utils.visual_utils import *
 from scene.sim_scene import SimScene
 from perception.perception_system import PerceptionSystem
@@ -101,7 +102,17 @@ class TaskPlanner():
         self.num_collision = 0
 
     def pipeline_sim(self):
-        self.planner.pipeline_sim()
+        # self.planner.pipeline_sim()
+        print("** Perception Started... **")
+        self.perception.pipeline_sim(
+            self.execution.color_img,
+            self.execution.depth_img,
+            self.execution.seg_img,
+            self.execution.scene.camera,
+            [self.execution.scene.robot.robot_id],
+            self.execution.scene.workspace.component_ids,
+        )
+        print("** Perception Done! **")
 
     def run_pipeline(self, ):
         # the following is just for autocompletion
@@ -128,32 +139,9 @@ class TaskPlanner():
                 )
             )
 
-        print(self.execution.object_local_id_dict)
-        print(self.perception.data_assoc.obj_ids_reverse)
-        local2perception = {
-            v: self.perception.data_assoc.obj_ids.get(int(k), -1)
-            for k, v in self.execution.object_local_id_dict.items()
-        }
-        print(local2perception)
-        pybullet_id = self.execution.scene.robot.pybullet_id
-        for i in range(2, p.getNumBodies(physicsClientId=pybullet_id)):
-            obj_i = p.getBodyUniqueId(i, physicsClientId=pybullet_id)
-            for j in range(i + 1, p.getNumBodies(physicsClientId=pybullet_id)):
-                obj_j = p.getBodyUniqueId(j, physicsClientId=pybullet_id)
-                contacts = p.getClosestPoints(
-                    obj_i,
-                    obj_j,
-                    distance=0.002,
-                    physicsClientId=pybullet_id,
-                )
-                if contacts:
-                    print(
-                        local2perception[obj_i],
-                        local2perception[obj_j],
-                        [contacts[0][x] for x in (1, 2, 5, 6, 7)],
-                    )
-        ### TODO: use contacts[7][2] = 1 => 2 below 1
-        ### TODO: use contacts[7][2] = -1 => 1 below 2
+        dg = DepGraph(self.perception, self.execution)
+        dg.draw_graph()
+        # dg.draw_graph(True)
 
         ### Grasp Sampling Test ###
         print("* Grasp Test *")
@@ -181,15 +169,6 @@ class TaskPlanner():
             except (IndexError, ValueError, KeyError):
                 continue
 
-            # self.pipeline_sim()
-            # self.perception.pipeline_sim(
-            #     self.execution.color_img,
-            #     self.execution.depth_img,
-            #     self.execution.seg_img,
-            #     self.execution.scene.camera,
-            #     [self.execution.scene.robot.robot_id],
-            #     self.execution.scene.workspace.component_ids,
-            # )
             time_info = self.planner.TryMoveOneObject(obj)
             print("\n\nDone:")
             for tt, tm in time_info.items():
@@ -197,20 +176,15 @@ class TaskPlanner():
                     print(f'{tt}: avg={np.average(tm)} std={np.std(tm)} num={len(tm)}')
                 else:
                     print(f'{tt}: {tm}')
-            # pick, pklift = self.planner.pick(obj)
-            # if len(pick) == 0:
-            #     continue
-            # place, pclift = self.planner.place(obj, pklift[-1], pick[-1])
-            # if len(place) == 0:
-            #     continue
-            # print("Execution!...")
-            # self.execution.detach_obj()
-            # self.execution.execute_traj(pick)
-            # self.execution.attach_obj(obj_id)
-            # self.execution.execute_traj(pklift)
-            # self.execution.execute_traj(place)
-            # self.execution.detach_obj()
-            # self.execution.execute_traj(pclift)
+            input("Press Enter to reset arm...")
+            plan_reset = self.planner.motion_planner.joint_dict_motion_plan(
+                self.execution.scene.robot.joint_dict,
+                self.execution.scene.robot.init_joint_dict
+            )
+            if len(plan_reset) == 0:
+                continue
+            self.execution.execute_traj(plan_reset)
+            self.pipeline_sim()
         ### Pick Test End ###
 
 

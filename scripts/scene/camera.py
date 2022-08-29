@@ -5,7 +5,7 @@ import transformations as tf
 import time
 
 class Camera():
-    def __init__(self, cam_pos=[0.39,0.0,1.2], look_at=[1.44,0,0.85], fov=90, far=1.2, img_size=320, visualize=False):
+    def __init__(self, cam_pos=[0.45,0.0,1.1], look_at=[1.5,0,0.95], fov=120, far=1.2, img_size=320, visualize=False):
         # TODO: parameterize the camera position
         # cam_pos = np.array([0.39, 0., 1.3])
         # look_at = np.array([1.44, 0., 0.7])

@@ -26,6 +26,7 @@ def get_object_mask(
     execution,
     perception,
     angle=None,
+    padding=2,
     n_samples=12000,
 ):
     obj_local_id = execution.object_local_id_dict[str(obj.pybullet_id)]
@@ -34,10 +35,10 @@ def get_object_mask(
     if shape[2] == p.GEOM_BOX:
         size_x = shape[3][0] / resol[0]
         size_x = np.round(size_x, decimals=3)
-        size_x = int(np.ceil(size_x))
+        size_x = int(np.ceil(size_x)) + padding
         size_y = shape[3][1] / resol[1]
         size_y = np.round(size_y, decimals=3)
-        size_y = int(np.ceil(size_y))
+        size_y = int(np.ceil(size_y)) + padding
         kernel = np.ones((size_x, size_y)).astype('uint8')
         if angle is None:
             angle = p.getEulerFromQuaternion(
@@ -51,7 +52,7 @@ def get_object_mask(
     elif shape[2] in (p.GEOM_CYLINDER, p.GEOM_CAPSULE):
         size_r = shape[3][1] / resol[0]
         size_r = np.round(size_r, decimals=3)
-        size_r = int(np.ceil(size_r))
+        size_r = int(np.ceil(size_r)) + padding
         xx, yy = np.mgrid[:size_r * 2 + 1, :size_r * 2 + 1]
         circle = (xx - size_r)**2 + (yy - size_r)**2
         disk = circle <= (size_r**2)
@@ -83,6 +84,7 @@ def generate_placements(obj, robot, execution, perception, workspace, display=Fa
     z_mid = (maxs[2] - mins[2]) / 2.0
     z = z_mid + ws_low[2] + 0.003
 
+    # shape_type = p.getCollisionShapeData(obj_local_id, -1, robot.pybullet_id)[0][2]
     # generate kernel for collision mask
     kernel = get_object_mask(obj, robot, execution, perception)
     print(f"{obj.obj_id}:")

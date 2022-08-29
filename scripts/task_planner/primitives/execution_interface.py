@@ -43,6 +43,7 @@ class ExecutionInterface():
             SolidPrimitive.SPHERE: p.GEOM_SPHERE,
         }
         self.object_state_msg = {}
+        self.debug_texts = {}
 
         # for updating information
         self.current_robot_state = self.scene.robot.joint_dict
@@ -270,6 +271,43 @@ class ExecutionInterface():
             msg.pose.orientation.z,
             msg.pose.orientation.w,
         ]
+        ### debug visualization ###
+        percept_id = str(
+            self.perception.data_assoc.obj_ids.get(int(msg.name), -int(msg.name))
+        )
+        x_pos = 0.5 * msg.solid.dimensions[self.r_index(
+            self.shape_type_dict[msg.solid.type]
+        )]
+        x_pos += 0.01
+        y_pos = 0.5 * msg.solid.dimensions[1]
+        y_pos += 0.01
+        # print(self.debug_texts)
+        if msg.name not in self.debug_texts:
+            self.debug_texts[msg.name] = (
+                percept_id,
+                p.addUserDebugText(
+                    percept_id,
+                    np.add(position, [x_pos, y_pos, 0.0]),
+                    textColorRGB=[1, 0, 0],
+                    textSize=2.0,
+                    physicsClientId=self.scene.robot.pybullet_id,
+                )
+            )
+        else:
+            prev_perc_id, prev_pyb_id = self.debug_texts[msg.name]
+            if percept_id != prev_perc_id:
+                self.debug_texts[msg.name] = (
+                    percept_id,
+                    p.addUserDebugText(
+                        percept_id,
+                        np.add(position, [x_pos, y_pos, 0.0]),
+                        textColorRGB=[1, 0, 0],
+                        textSize=2.0,
+                        replaceItemUniqueId=prev_pyb_id,
+                        physicsClientId=self.scene.robot.pybullet_id,
+                    )
+                )
+        ### end debug visualization ###
         if msg.name not in self.object_local_id_dict:
             shape_type = self.shape_type_dict[msg.solid.type]
             # print(
@@ -409,14 +447,16 @@ class ExecutionInterface():
         #     np.save(ct+"_obj_transform.npy", self.perception.objects[self.attached_obj].transform)
 
         # perform perception
-        self.perception.pipeline_sim(
-            self.color_img,
-            self.depth_img,
-            self.seg_img,
-            self.scene.camera,
-            [self.scene.robot.robot_id],
-            self.scene.workspace.component_ids,
-        )
+        if False:
+            self.perception.pipeline_sim(
+                self.color_img,
+                self.depth_img,
+                self.seg_img,
+                self.scene.camera,
+                [self.scene.robot.robot_id],
+                self.scene.workspace.component_ids,
+            )
+            print("** Perception Done! **")
         # if attached_obj is not None:
         #     obj = self.perception.objects[self.attached_obj]
         #     pcd = obj.sample_conservative_pcd() / obj.resol

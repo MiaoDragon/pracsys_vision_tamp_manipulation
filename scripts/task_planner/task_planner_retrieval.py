@@ -140,8 +140,9 @@ class TaskPlanner():
             )
 
         dg = DepGraph(self.perception, self.execution)
-        dg.draw_graph()
-        # dg.draw_graph(True)
+        self.execution.target_obj_id = dg.target_id
+        # dg.draw_graph()
+        dg.draw_graph(True)
 
         ### Grasp Sampling Test ###
         print("* Grasp Test *")
@@ -158,6 +159,7 @@ class TaskPlanner():
             pose_ind = input("Please Enter Object Id: ")
         ### Grasp Sampling Test End ###
 
+        dg.draw_graph()
         ### Pick & Place Test ###
         print("* Pick & Place Test *")
         pose_ind = 'start'
@@ -185,6 +187,8 @@ class TaskPlanner():
                 continue
             self.execution.execute_traj(plan_reset)
             self.pipeline_sim()
+            dg.gen_graph()
+            dg.draw_graph()
         ### Pick Test End ###
 
 

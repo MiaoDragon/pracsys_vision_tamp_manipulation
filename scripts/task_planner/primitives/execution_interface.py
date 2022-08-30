@@ -44,6 +44,7 @@ class ExecutionInterface():
         }
         self.object_state_msg = {}
         self.debug_texts = {}
+        self.target_obj_id = -1
 
         # for updating information
         self.current_robot_state = self.scene.robot.joint_dict
@@ -271,44 +272,6 @@ class ExecutionInterface():
             msg.pose.orientation.z,
             msg.pose.orientation.w,
         ]
-        ### debug visualization ###
-        percept_id = self.perception.data_assoc.obj_ids.get(int(msg.name), -int(msg.name))
-        percept_id = str(percept_id) if percept_id > 0 else "H"
-        x_pos = 0.5 * msg.solid.dimensions[self.r_index(
-            self.shape_type_dict[msg.solid.type]
-        )]
-        x_pos += 0.01
-        y_pos = 0.5 * msg.solid.dimensions[1]
-        y_pos += 0.01
-        # print(self.debug_texts)
-        if msg.name not in self.debug_texts:
-            self.debug_texts[msg.name] = (
-                percept_id,
-                position,
-                p.addUserDebugText(
-                    percept_id,
-                    np.add(position, [x_pos, y_pos, 0.0]),
-                    textColorRGB=[1, 0, 0],
-                    textSize=2.0,
-                    physicsClientId=self.scene.robot.pybullet_id,
-                ),
-            )
-        else:
-            prev_perc_id, prev_position, prev_pyb_id = self.debug_texts[msg.name]
-            if percept_id != prev_perc_id or prev_position != position:
-                self.debug_texts[msg.name] = (
-                    percept_id,
-                    position,
-                    p.addUserDebugText(
-                        percept_id,
-                        np.add(position, [x_pos, y_pos, 0.0]),
-                        textColorRGB=[1, 0, 0],
-                        textSize=2.0,
-                        replaceItemUniqueId=prev_pyb_id,
-                        physicsClientId=self.scene.robot.pybullet_id,
-                    ),
-                )
-        ### end debug visualization ###
         if msg.name not in self.object_local_id_dict:
             shape_type = self.shape_type_dict[msg.solid.type]
             # print(
@@ -331,6 +294,45 @@ class ExecutionInterface():
                 orientation,
                 physicsClientId=self.scene.robot.pybullet_id,
             )
+        ### debug visualization ###
+        p_name = str(self.perception.data_assoc.obj_ids.get(int(msg.name), '(H)'))
+        if self.object_local_id_dict[msg.name] == self.target_obj_id:
+            p_name = 'T ' + p_name
+        x_pos = 0.5 * msg.solid.dimensions[self.r_index(
+            self.shape_type_dict[msg.solid.type]
+        )]
+        x_pos += 0.01
+        y_pos = 0.5 * msg.solid.dimensions[1]
+        y_pos += 0.01
+        # print(self.debug_texts)
+        if msg.name not in self.debug_texts:
+            self.debug_texts[msg.name] = (
+                p_name,
+                position,
+                p.addUserDebugText(
+                    p_name,
+                    np.add(position, [x_pos, y_pos, 0.0]),
+                    textColorRGB=[1, 0, 0],
+                    textSize=2.0,
+                    physicsClientId=self.scene.robot.pybullet_id,
+                ),
+            )
+        else:
+            prev_p_name, prev_position, prev_pyb_id = self.debug_texts[msg.name]
+            if p_name != prev_p_name or prev_position != position:
+                self.debug_texts[msg.name] = (
+                    p_name,
+                    position,
+                    p.addUserDebugText(
+                        p_name,
+                        np.add(position, [x_pos, y_pos, 0.0]),
+                        textColorRGB=[1, 0, 0],
+                        textSize=2.0,
+                        replaceItemUniqueId=prev_pyb_id,
+                        physicsClientId=self.scene.robot.pybullet_id,
+                    ),
+                )
+        ### end debug visualization ###
 
     def r_index(self, stype):
         return {p.GEOM_CYLINDER: 1}.get(stype, 0)

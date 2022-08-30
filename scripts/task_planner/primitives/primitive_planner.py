@@ -77,7 +77,7 @@ class PrimitivePlanner():
             self.execution,
             self.perception,
             self.scene.workspace,
-            display=True,
+            # display=True,
         )
         t1 = time.time()
         time_info['placements_gen'] = t1 - t0
@@ -417,7 +417,7 @@ class PrimitivePlanner():
         # for obs_id in self.execution.object_state_msg.keys():
         for obs in self.perception.objects.values():
             obs_id = obs.pybullet_id
-            print(obs_id)
+            # print(obs_id)
             # print(self.execution.object_state_msg[str(obs_id)].name)
             obs_msgs.append(self.execution.object_state_msg[str(obs_id)])
         self.motion_planner.set_collision_env_with_models(obs_msgs)

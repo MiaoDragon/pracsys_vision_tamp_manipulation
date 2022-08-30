@@ -73,7 +73,8 @@ def get_object_mask(
 def generate_placements(obj, robot, execution, perception, workspace, display=False):
     obj_local_id = execution.object_local_id_dict[str(obj.pybullet_id)]
     resol = perception.occlusion.resol
-    occlusion_label, occupied_label, occluded_list = perception.occlusion_label_t, perception.occupied_label_t, perception.occluded_t
+    # occlusion_label, occupied_label = perception.occlusion_label_t, perception.occupied_label_t
+    occlusion_label, occupied_label = perception.filtered_occlusion_label, perception.occupied_label_t
 
     ws_low = workspace.region_low
     ws_high = workspace.region_high

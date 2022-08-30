@@ -20,11 +20,11 @@ from utils.transform_utils import *
 from .rearrangement import Rearrangement
 from . import utils, obj_pose_generation
 from motion_planner.motion_planner import MotionPlanner
-
+from task_planner.primitives.execution_interface import ExecutionInterface
 
 class PrimitivePlanner():
 
-    def __init__(self, scene, perception_system, execution):
+    def __init__(self, scene, perception_system, execution: ExecutionInterface):
         """
         Create a PyBullet scene including workspace, robot and camera
         """
@@ -238,6 +238,9 @@ class PrimitivePlanner():
     def pipeline_sim(self):
         # sense & perceive
         # wait for image to update
+        print('pipeline_sim...')
+        self.execution.timer_cb(None)
+
         v_pcds = []
         for obj_id, obj in self.perception.objects.items():
             v_pcd = obj.sample_conservative_pcd()

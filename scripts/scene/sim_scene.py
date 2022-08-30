@@ -72,6 +72,8 @@ class SimScene():
         self.camera = camera
         self.pid = pid
 
+        self.objects = []
+
     # def __init__(self, workspace, robot, camera, pid):
     #     self.workspace = workspace
     #     self.robot = robot

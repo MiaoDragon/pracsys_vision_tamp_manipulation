@@ -16,11 +16,10 @@ import trimesh
 DEBUG = False
 
 class ObjectBelief():
-    def __init__(self, obj_id, pybullet_id, obj_mesh: trimesh.Trimesh, resol, transform):
+    def __init__(self, obj_id, obj_mesh: trimesh.Trimesh, resol, transform):
         """
         initialize the object model to be the bounding box containing the conservative volume of the object
-
-        zmin: table lowest z (this is fixed)
+        obj_model: a dictionary recording the shape, and details of the model
         """
         bounds = obj_mesh.bounds
         xmin = bounds[0][0]
@@ -29,6 +28,16 @@ class ObjectBelief():
         ymax = bounds[1][1]
         zmin = bounds[0][2]
         zmax = bounds[1][2]
+
+        # TODO: add the object into scene using the mesh model
+        # currently we just add the object into moveit scene
+        # if obj_model['shape'] == 'cylinder':
+        #     # create a cylinder in simulator
+        #     # create a cylinder mesh to access later
+        #     radius = obj_model['radius']
+        #     height = obj_model['height']
+
+        #     pass        
 
         self.obj_mesh = obj_mesh
         pcd = trimesh.sample.volume_mesh(obj_mesh, 2500)
@@ -83,11 +92,9 @@ class ObjectBelief():
         self.world_in_voxel_rot = self.world_in_voxel[:3,:3]
         self.world_in_voxel_tran = self.world_in_voxel[:3,3]
 
-        self.transform = transform
+        self.transform = transform  # this is the transform of the mesh, and the pcd, NOT the voxel
 
-        self.obj_hide_set = set()  # list of objects that are hiding this object
         self.obj_id = obj_id 
-        self.pybullet_id = pybullet_id
         self.depth_img = None
 
     def get_optimistic_model(self):
@@ -150,25 +157,3 @@ class ObjectBelief():
         net_transform[:3,:3] = transform[:3,:3].dot(obj_in_center[:3,:3])
         net_transform[:3,3] = transform[:3,:3].dot(obj_in_center[:3,3]) + transform[:3,3]
         return net_transform
-
-def test():
-    # test the module
-    object = ObjectBelief(0,0, 0.0, 0.0, 0.0, 1.000, 1.000, 1.000, [0.1,0.1,1.0], 0.05)
-    object.set_active()
-    # object.tsdf = object.tsdf + 1.0
-    
-    # object.expand_model(-0.005, -0.005, -0.005, 1.01,1.01,1.01)
-
-    # print('new mins: ')
-    # print(object.xmin, object.ymin, object.zmin)
-    # print('new maxs: ')
-    # print(object.xmax, object.ymax, object.zmax)
-
-    # print(object.tsdf[1:,1:,1].sum())
-    # object.tsdf_count += 1
-
-    # object.get_surface_normal()
-    print(object.check_complete())
-
-if __name__ == "__main__":
-    test()

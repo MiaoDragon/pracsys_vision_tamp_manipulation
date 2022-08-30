@@ -3,12 +3,11 @@ integrated in the task planner for faster response
 - occlusion
 - objects
 """
-from re import S
 from .scene_belief import SceneBelief
 from .object_belief import ObjectBelief
-from .real_data_association import CylinderDataAssociation
-from .real_segmentation import CylinderSegmentation
-from scene.sim_scene import SimScene
+from .data_association import GroundTruthDataAssociation
+from .segmentation import GroundTruthSegmentation
+
 import numpy as np
 import gc
 
@@ -17,56 +16,55 @@ from utils.visual_utils import *
 import cv2
 
 LOG = 0
-class PercetionSystem():
-    def __init__(self, occlusion_params, object_params, target_params, scene: SimScene):
+
+class PerceptionSystem():
+    def __init__(self, occlusion_params, object_params, target_params, tsdf_color_flag=False):
         occlusion = SceneBelief(**occlusion_params)
         self.object_params = object_params  # resol and scale
         self.target_params = target_params  # for recognizing target object
         self.occlusion = occlusion
-        self.objects = []  # this stores the recognized objects. assuming object ids start from 0
-        self.obj_initial_poses = []  # useful to backpropagate
+        self.objects = []  # this stores the recognized objects.
+        self.obj_initial_poses = {}  # useful to backpropagate
         self.sensed_imgs = []
         self.sensed_poses = []
         self.filtered_occluded = None
         self.filtered_occlusion_label = None
 
+        # self.table_z = self.occlusion.z_base
+        # self.filtered_occupied_label = filtered_occupied_label
         self.filtered_occluded_dict = None
 
-        self.scene = scene
-        self.data_assoc = CylinderDataAssociation(object_params)
-        self.segmentation = CylinderSegmentation(scene.camera)
-        
-    def perceive(self, depth_img, color_img, seg_img, seen_obj_models: dict):
-        """
-        for new object models, append to the object list
-        use the images to construct occlusion space
-        label the occlusion space using the recognized objects
-        filter the occlusion space
+        self.data_assoc = GroundTruthDataAssociation()
+        self.segmentation = GroundTruthSegmentation()
+        self.tsdf_color_flag = tsdf_color_flag
 
-        obj_models: associated id -> obj_model
+    def perceive(self, depth_img, color_img, seg_img, obj_models, scene: SimScene, visualize=False):
         """
-        scene = self.scene
+        Given raw images, and recognized object models (in mesh), do a perception step to update the state
+        """
         camera_extrinsics = scene.camera.info['extrinsics']
         camera_intrinsics = scene.camera.info['intrinsics']
+        camera_far = scene.camera.info['far']
+        camera_near = scene.camera.info['near']
+        workspace_ids = scene.workspace.workspace.component_ids
+        robot_ids = [scene.robot.robot_id]
 
-        # * for new object models, add them to the scene
-        obj_ids = []
-        obj_models = []
-        for obj_id, obj_model in seen_obj_models.items():
-            if obj_id < len(self.objects):
-                continue
-            obj_ids.append(obj_id)
-            obj_models.apepnd(obj_model)
-        # sort the object ids so we can add the new objects to the scene
-        sort_indices = np.argsort(obj_ids)
-        for i in range(len(sort_indices)):
-            new_obj_id = obj_ids[sort_indices[i]]
-            obj_model = obj_models[sort_indices[i]]
-            obj = ObjectBelief(new_obj_id, obj_model['mesh'], self.object_params['resol'], self.object_params['transform'])
-            self.objects.append(obj)
-            self.obj_initial_poses.append(np.array(obj_model['transform']))
+        depth_img = np.array(depth_img)
+        for cid in workspace_ids:
+            depth_img[seg_img==cid] = 0  # workspace
+        depth_img[seg_img==-1] = 0  # background
 
-        # * use the images to construct occlusion space
+        for i in range(len(obj_models)):
+            obj_id = obj_models[i]['obj_id']  # idx in the list
+            transform = obj_models[i]['transform']
+            if obj_id > len(self.objects):
+                # create new object
+                # TODO: add the object mesh into the planning scene
+                new_object = ObjectBelief(obj_id, self.data_assoc.obj_ids_reverse[obj_id], obj_mesh, self.object_params['resol'], transform)
+                self.objects.append(new_object)
+                self.obj_initial_poses[obj_id] = new_object.transform
+
+        # * Occlusion
         # get raw occlusion
         occluded = self.occlusion.scene_occlusion(depth_img, color_img, camera_extrinsics, camera_intrinsics)
 
@@ -101,13 +99,29 @@ class PercetionSystem():
         self.occluded_dict_t = occluded_dict
         print("*** labels written ***")
 
+
         filtered_occluded, filtered_occlusion_label, filtered_occluded_dict = \
-            self.filtering(camera_extrinsics, camera_intrinsics)        
+            self.filtering(camera_extrinsics, camera_intrinsics)
+
         self.filtered_occluded = filtered_occluded
         self.filtered_occlusion_label = filtered_occlusion_label
         # self.filtered_occupied_label = filtered_occupied_label
         self.filtered_occluded_dict = filtered_occluded_dict
 
+
+        del occluded
+        del occlusion_label
+        del occupied_label
+        del occupied_dict
+        del occluded_dict
+        del filtered_occluded
+        del filtered_occlusion_label
+        del filtered_occluded_dict
+        del obj_pcds
+        del obj_opt_pcds
+
+        if len(sensed_obj_ids) > 0:
+            del seg_depth_img
 
     def filtering(self, camera_extrinsics, camera_intrinsics):
         """
@@ -189,19 +203,16 @@ class PercetionSystem():
 
         return net_occluded, new_occlusion_label, occluded_dict
 
-    def pipeline_sim(self, color_img, depth_img, seg_img):
+    def pipeline_sim(self, color_img, depth_img, seg_img, camera, robot_ids, workspace_ids):
         """
         given the camera input, segment the image, and data association
         """
-        scene = self.scene
-        camera = scene.camera
-        workspace_ids = scene.workspace.component_ids
-        robot_ids = [scene.robot.robot_id]
+        # color_img, depth_img, seg_img = camera.sense()
+
         # visualzie segmentation image
 
         self.segmentation.set_ground_truth_seg_img(seg_img)
-        seg_img, sensed_obj_models = self.segmentation.segmentation(num_objs=5)
-        # sensed_obj_model: seg_id -> obj_model
+        seg_img = self.segmentation.segment_img(color_img, depth_img)
 
         # self.target_recognition.set_ground_truth_seg_img(seg_img)
         # target_seg_img = self.target_recognition.recognize(color_img, depth_img)
@@ -210,20 +221,21 @@ class PercetionSystem():
         self.color_img = color_img
         # self.target_seg_img = target_seg_img
 
-        seg_img, obj_models = self.data_assoc.data_association(seg_img, sensed_obj_models, self.objects)
-        # obj_models: obj_id -> obj_model
-
+        assoc, seg_img, sensed_obj_ids = self.data_assoc.data_association(seg_img, robot_ids, workspace_ids)
         # sensed_obj_ids: currently seen objects in the scene
         """
         in reality the association can change in time, but the object
         label shouldn't change. So we should only remember the result
         after applying data association
         """
+        self.last_assoc = assoc
         self.seg_img = seg_img
 
         # objects that have been revealed will stay revealed
-        self.perceive(depth_img, color_img, seg_img, obj_models, scene)
-
+        self.perceive(depth_img, color_img, seg_img,
+                    sensed_obj_ids, object_hide_set,
+                    camera.info['extrinsics'], camera.info['intrinsics'], camera.info['far'],
+                    robot_ids, workspace_ids)
 
     def sample_pcd(self, mask, n_sample=10):
         # sample voxels in te mask
@@ -244,4 +256,3 @@ class PercetionSystem():
         del voxel_z
 
         return total_sample
-

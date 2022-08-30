@@ -51,14 +51,17 @@ class ExecutionInterface():
         seg_sub = message_filters.Subscriber('seg_image', Image)
         state_sub = message_filters.Subscriber('robot_state_publisher', RobotState)
         obj_sub = message_filters.Subscriber('object_state', PercievedObject)
-        ts = message_filters.ApproximateTimeSynchronizer(
-            [color_sub, depth_sub, seg_sub, state_sub],
-            5,
-            0.01,
-        )
+        # ts = message_filters.ApproximateTimeSynchronizer(
+        #     [color_sub, depth_sub, seg_sub, state_sub],
+        #     5,
+        #     0.01,
+        # )
+
+        
         # ts =message_filters.TimeSynchronizer([color_sub, depth_sub, seg_sub, state_sub],5)
 
-        ts.registerCallback(self.info_cb)
+        # ts.registerCallback(self.info_cb)
+
         # self.timer = rospy.Timer(rospy.Duration(0.01), self.timer_cb)
 
         # add a lock
@@ -417,39 +420,3 @@ class ExecutionInterface():
             [self.scene.robot.robot_id],
             self.scene.workspace.component_ids,
         )
-        # if attached_obj is not None:
-        #     obj = self.perception.objects[self.attached_obj]
-        #     pcd = obj.sample_conservative_pcd() / obj.resol
-        #     pcd_ind = np.floor(pcd).astype(int)
-        #     # Get vertex colors
-        #     rgb_vals = np.zeros(pcd_ind.shape)
-        #     # rgb_vals = obj.color_tsdf[pcd_ind[:, 0], pcd_ind[:, 1], pcd_ind[:, 2]] / 255
-
-        #     pcd = visualize_pcd(pcd, rgb_vals)
-        #     bbox = visualize_bbox(obj.voxel_x, obj.voxel_y, obj.voxel_z)
-        #     # voxel = visualize_voxel(obj.voxel_x, obj.voxel_y, obj.voxel_z, model, [1,0,0])
-
-        #     center = [obj.voxel_y.shape[0]/2, obj.voxel_y.shape[1]/2, obj.voxel_y.shape[2]/2]  # look_at target
-        #     eye = [-obj.voxel_y.shape[0]*1, obj.voxel_y.shape[1]/2, obj.voxel_y.shape[2]*2]  # camera position
-        #     up = [0, 0, 1]  # camera orientation
-
-        #     render = setup_render(center, eye, up)
-        #     # Show the original coordinate axes for comparison.
-        #     # X is red, Y is green and Z is blue.
-        #     render.scene.show_axes(True)
-        #     # Define a simple unlit Material.
-        #     # (The base color does not replace the arrows' own colors.)
-        #     # mtl = create_material([1.0, 1.0, 1.0, 0.01], 'defaultUnlit')
-        #     mtl2 = create_material([1.0, 1.0, 1.0, 1], 'defaultUnlit')
-        #     # render.scene.add_geometry("voxel", voxel, mtl)
-        #     render.scene.add_geometry("pcd", pcd, mtl2)
-        #     render.scene.add_geometry("bbox", bbox, mtl2)
-        #     # Read the image into a variable
-        #     img_o3d = render.render_to_image()
-        #     img_o3d = cv2.cvtColor(np.array(img_o3d), cv2.COLOR_RGBA2BGRA)
-        #     cv2.imwrite(ct+"_recon.png", img_o3d)
-
-        # if object is attached, then sense the object
-        # if attached_obj is not None:
-        #     self.perception.sense_object(attached_obj, self.color_img, self.depth_img, self.seg_img,
-        #                                 self.scene.camera, [self.scene.robot.robot_id], self.scene.workspace.component_ids)

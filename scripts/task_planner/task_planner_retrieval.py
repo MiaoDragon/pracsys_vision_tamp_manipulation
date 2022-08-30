@@ -101,6 +101,7 @@ class TaskPlanner():
         self.num_collision = 0
 
     def pipeline_sim(self):
+        rospy.sleep(1.0)
         self.planner.pipeline_sim()
 
     def run_pipeline(self, ):

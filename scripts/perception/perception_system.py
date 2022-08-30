@@ -224,7 +224,6 @@ class PerceptionSystem():
         self.occupied_label_t = occupied_label
         self.occupied_dict_t = occupied_dict
         self.occluded_dict_t = occluded_dict
-        print("*** labels written ***")
 
 
         if LOG:
@@ -246,6 +245,7 @@ class PerceptionSystem():
         self.filtered_occlusion_label = filtered_occlusion_label
         # self.filtered_occupied_label = filtered_occupied_label
         self.filtered_occluded_dict = filtered_occluded_dict
+        print("*** labels written ***")
 
 
         del occluded

@@ -295,9 +295,9 @@ class ExecutionInterface():
                 physicsClientId=self.scene.robot.pybullet_id,
             )
         ### debug visualization ###
-        p_name = str(self.perception.data_assoc.obj_ids.get(int(msg.name), '(H)'))
+        p_name = str(self.perception.data_assoc.obj_ids.get(int(msg.name), 'H'))
         if self.object_local_id_dict[msg.name] == self.target_obj_id:
-            p_name = 'T ' + p_name
+            p_name = 'T.' + p_name
         x_pos = 0.5 * msg.solid.dimensions[self.r_index(
             self.shape_type_dict[msg.solid.type]
         )]

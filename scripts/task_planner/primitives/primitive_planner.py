@@ -9,6 +9,7 @@ and implementations of task actions
 import gc
 import copy
 import time
+from random import shuffle
 
 import cv2
 import std_msgs
@@ -162,7 +163,8 @@ class PrimitivePlanner():
             ee_transform = robot.get_tip_link_pose(grasp_joint_dict)
             obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
             obj2gripper = np.linalg.inv(obj_rel_transform)
-            for sample_pos in reversed(placements):
+            shuffle(placements)
+            for sample_pos in placements:
                 tpl0 = time.time()
 
                 # get gripper transform at placement

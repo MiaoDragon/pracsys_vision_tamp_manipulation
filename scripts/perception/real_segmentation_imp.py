@@ -35,6 +35,7 @@ class CylinderSegmentation():
         self.camera = camera  # camera model
         self.bridge = CvBridge()
         self.getDepthIntrinsicInfo()
+        self.plane_threshold = 0.01
     def getDepthIntrinsicInfo(self):
         intrinsics = self.camera.info['intrinsics']
         self.depth_camera_info = dict()
@@ -84,7 +85,7 @@ class CylinderSegmentation():
         return np.stack([x, y, z], axis = -1)
 
     def convert_depth_color_to_point_cloud(self, depth_numpy_image, color_numpy_image):
-        depth = depth_numpy_image / 1000
+        depth = np.array(depth_numpy_image)# / 1000
 
         i,j = np.indices(depth_numpy_image.shape)
         x = (j - self.depth_camera_info['intrinsics']['ppx'])/self.depth_camera_info['intrinsics']['fx'] * depth
@@ -99,17 +100,6 @@ class CylinderSegmentation():
         pcd = pcd[mask]
         color = color[mask]
         return pcd, color
-
-    def convert_pcd_to_indices(self, pcd):
-        height = self.depth_camera_info['height']
-        width = self.depth_camera_info['width']
-        pcd = pcd / pcd[:,2].reshape((-1,1))
-        x = pcd[:,0] * self.depth_camera_info['intrinsics']['fx'] + self.depth_camera_info['intrinsics']['ppx']
-        y = pcd[:,1] * self.depth_camera_info['intrinsics']['fy'] + self.depth_camera_info['intrinsics']['ppy']
-        indices = np.array([y,x]).T
-        indices = np.floor(indices).astype(int)
-        return indices
-
 
 
     def visualize_point_cloud(self, point_cloud_array, pcd_color=None, show_normal=False, mask=None):
@@ -142,146 +132,53 @@ class CylinderSegmentation():
         point_cloud = np.array(point_cloud)
         pcd_color = np.array(pcd_color)
         plane_models = []
-        for i in range(4):
-            keep_mask, plane_model = self.filter_largest_plane(point_cloud)
-            self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~keep_mask)
-            point_cloud, pcd_color = self.crop_pcd(keep_mask, point_cloud, pcd_color)
-            plane_models.append(plane_model)
-        
-        # find the back plane normal, which is close to z axis of the camera frame
-        plane_models = np.array(plane_models)
-        z_axis = np.array([0,0,-1.])
-        idx_back = plane_models[:,:3].dot(z_axis).argmax()
-        back_model = np.array(plane_models[idx_back])
-        # find the side plane normal, which are the closest pairs
-        plane_models = np.delete(plane_models, idx_back, 0)
+        print('point cloud: ')
+        print(point_cloud)
 
-        max_pair1 = -1
-        max_pair2 = -1
-        max_v = -1
-        for i in range(3):
-            for j in range(i+1,3):
-                dot = np.abs(plane_models[i,:3].dot(plane_models[j,:3]))
-                if dot > max_v:
-                    max_v = dot
-                    max_pair1 = i
-                    max_pair2 = j
-        
-        side_models = np.array(plane_models[[max_pair1, max_pair2]])
-        bot_plane = np.delete(plane_models, [max_pair1, max_pair2], 0).reshape(-1)
+        keep_mask, plane_model = self.filter_largest_plane(point_cloud)
+        if plane_model[1] > 0:
+            plane_model[0] = -plane_model[0]
+            plane_model[1] = -plane_model[1]
+            plane_model[2] = -plane_model[2]
+            plane_model[3] = -plane_model[3]
+        print('upated plane model: ', plane_model)
+
+        self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~keep_mask)
+        point_cloud, pcd_color = self.crop_pcd(keep_mask, point_cloud, pcd_color)
+        plane_models.append(plane_model)
+
+
+        if False:
+            # NOTE: in shelf, there are four planes. If table-top there is only one plane
+
+            # find the back plane normal, which is close to z axis of the camera frame
+            plane_models = np.array(plane_models)
+            z_axis = np.array([0,0,-1.])
+            idx_back = plane_models[:,:3].dot(z_axis).argmax()
+            back_model = np.array(plane_models[idx_back])
+            # find the side plane normal, which are the closest pairs
+            plane_models = np.delete(plane_models, idx_back, 0)
+
+            max_pair1 = -1
+            max_pair2 = -1
+            max_v = -1
+            for i in range(3):
+                for j in range(i+1,3):
+                    dot = np.abs(plane_models[i,:3].dot(plane_models[j,:3]))
+                    if dot > max_v:
+                        max_v = dot
+                        max_pair1 = i
+                        max_pair2 = j
+            
+            side_models = np.array(plane_models[[max_pair1, max_pair2]])
+            bot_plane = np.delete(plane_models, [max_pair1, max_pair2], 0).reshape(-1)
 
         # store the plane models
-        plane_dict = {"back_plane": back_model, "side_planes": side_models, "bot_plane": bot_plane}
+        # plane_dict = {"back_plane": back_model, "side_planes": side_models, "bot_plane": bot_plane}
+        bot_plane = plane_models[0]
+        plane_dict = {"bot_plane": bot_plane}
         f = open('plane_models.pkl', 'wb')
         pickle.dump(plane_dict, f)
-
-    def find_cylinders(self, rgb_img, depth_img, num_objects=2, filter_plane=False):
-        color_numpy_image = np.array(rgb_img) / 255
-        depth_numpy_image = np.array(depth_img)
-        # print('depth_numpy_image shape: ')
-        # print(depth_numpy_image.shape)
-
-        # print('color_numpy_image shape: ')
-        # print(color_numpy_image.shape)
-        # input('next')
-        # print(depth_numpy_image.dtype)
-        depth_numpy_image = np.array(depth_numpy_image).astype(np.float32)
-        # TODO: apply filter to the depth image so it is smoother
-        kernel_size = 10
-        # morphed_depth = cv2.morphologyEx(depth_numpy_image, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size)))
-        depth1 = cv2.bilateralFilter(src=depth_numpy_image, d=11, sigmaColor=0.05, sigmaSpace=0.65)
-        # cv2.imshow('morphed_depth', depth1/depth1.max())
-        # cv2.waitKey(0)
-
-        # point_cloud = self.convert_depth_to_point_cloud(depth1)
-        point_cloud, pcd_color = self.convert_depth_color_to_point_cloud(depth1,color_numpy_image)
-
-        # input("see the whole point cloud without any filtering")
-        # self.visualize_point_cloud(point_cloud, show_normal=False)
-
-        #################### filter out some background noise ####################
-        point_cloud, pcd_color = self.crop_pcd(point_cloud[:, 2] > 0.9, point_cloud, pcd_color)
-        # input("see the point cloud after filtering those within 1.1m")
-        # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False)
-        point_cloud, pcd_color = self.crop_pcd(point_cloud[:, 2] < 1.65, point_cloud, pcd_color)
-        # input("see the point cloud after filtering based on z axis distance")
-        # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False)
-
-        # point_cloud = point_cloud[point_cloud[:, 1] < 0.25]
-        # # input("see the point cloud after filtering based on y axis distance")
-        # self.visualize_point_cloud(point_cloud, show_normal=False)
-
-        # point_cloud = point_cloud[point_cloud[:, 0] < 0.65]
-        # point_cloud = point_cloud[point_cloud[:, 0] > -0.65]
-
-        # self.visualize_point_cloud(point_cloud, show_normal=False)
-        ###########################################################################
-
-        ### filter out three largest planes which represent known background 
-        if filter_plane:
-            self.filter_plane(point_cloud, pcd_color)
-        # use the filtered plane to segment out objects
-        f = open('plane_models.pkl', 'rb')
-        plane_models = pickle.load(f)
-        back_model = plane_models['back_plane']
-        side_models = plane_models['side_planes']
-        bot_model = plane_models['bot_plane']
-        bot_plane = bot_model
-        mask = (point_cloud[:,:3].dot(back_model[:3]) + back_model[3] >= 0.04)
-        mask &= (point_cloud[:,:3].dot(side_models[0][:3]) + side_models[0][3] >= 0.04)
-        mask &= (point_cloud[:,:3].dot(side_models[1][:3]) + side_models[1][3] >= 0.04)
-        mask &= (point_cloud[:,:3].dot(bot_model[:3]) + bot_model[3] >= 0.04)
-        # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~mask)
-        point_cloud, pcd_color = self.crop_pcd(mask, point_cloud, pcd_color)
-
-        # crop the ceiling
-        mask = (point_cloud[:,:3].dot(bot_plane[:3]) + bot_plane[3] >= 0.5-0.05)
-        mask = ~mask
-        # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~mask)
-        point_cloud, pcd_color = self.crop_pcd(mask, point_cloud, pcd_color)
-        
-        # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False)
-        mask = self.outlier_filter_pcd(point_cloud, pcd_color)
-        print('after outlier_filter_pcd...')
-        point_cloud, pcd_color = self.crop_pcd(mask, point_cloud, pcd_color)
-
-
-        # TODO: get the point clouds belong to the object
-        labels = self.dbscan_from_point_cloud(point_cloud) ### point cloud classification
-        sizes_label = np.sum(np.expand_dims(labels, axis = 1) == np.arange(np.max(labels) + 1), axis = 0)
-        top_size_label = np.argsort(sizes_label)[::-1] ### sort in descending order
-        
-
-        print('number of labels: ')
-        # visualize each label
-        cylinders = []
-        total_mask = np.zeros(labels.shape).astype(bool)
-
-        cylinder_models = []
-        
-        for i in range(num_objects):
-            print('showing label %d/%d...' % (i,len(top_size_label)))
-            mask = (labels == top_size_label[i])
-            total_mask |= mask
-
-            self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=mask)
-
-            pcd_i, color_i = self.crop_pcd(mask, point_cloud, pcd_color)
-            mid_center, R, height, axis, rot_mat, cylinder = self.fit_cylinder(pcd_i, bot_plane[:3])
-            cylinders.append(cylinder)
-            cylinder_model = {'mid_center': mid_center, 'radius': R, 'height': height, 'axis': axis, 'transform': rot_mat, 'pcd': pcd_i}
-            cylinder_models.append(cylinder_model)
-
-            # input('show next label...')
-        # visualize the cylinders
-        vis_pcd = o3d.geometry.PointCloud()
-        vis_pcd.points = o3d.utility.Vector3dVector(point_cloud)
-        vis_pcd.colors = o3d.utility.Vector3dVector(pcd_color)
-        o3d.visualization.draw_geometries([vis_pcd] + cylinders)
-
-        # * extract the point cloud corresponding to cylinders
-        point_cloud, pcd_color = self.crop_pcd(total_mask, point_cloud, pcd_color)
-        return cylinder_models
 
     def find_largest_plane(self, point_cloud_input,
             segment_plane_kwargs = {'distance_threshold': 0.01,
@@ -324,6 +221,10 @@ class CylinderSegmentation():
                 'ransac_n': 10, 'num_iterations': 1000},
             plane_model_input = None):
 
+
+        self.visualize_point_cloud(point_cloud_input)
+
+
         plane_info = self.find_largest_plane(
                 point_cloud_input, segment_plane_kwargs, plane_model_input)
         inliers_mask = np.zeros(point_cloud_input.shape[0]).astype(np.bool)
@@ -345,7 +246,7 @@ class CylinderSegmentation():
         normal = np.array([a,b,c])
 
         keep_mask = (~inliers_mask)
-        keep_mask = keep_mask & (point_cloud_input.dot(normal) >= -d+0.04)
+        keep_mask = keep_mask & (point_cloud_input.dot(normal) >= -d+self.plane_threshold)
         
         # point_cloud_output = point_cloud_input[inliers_mask]
         return keep_mask, np.array([a,b,c,d])
@@ -491,11 +392,18 @@ class CylinderSegmentation():
         filter_plane can be used for preprocessing the workspace when camera and workspace changes
         """
         # depth_image_msg = rospy.wait_for_message('/camera/aligned_depth_to_color/image_raw', Image)
-        color_image_msg = rospy.wait_for_message('/camera/color/image_raw', Image)
-        depth_image_msg = rospy.wait_for_message('/camera/aligned_depth_to_color/image_raw', Image)
+        # color_image_msg = rospy.wait_for_message('/camera/color/image_raw', Image)
+        # depth_image_msg = rospy.wait_for_message('/camera/aligned_depth_to_color/image_raw', Image)
+
+        color_image_msg = rospy.wait_for_message('/rgb_image', Image)
+        depth_image_msg = rospy.wait_for_message('/depth_image', Image)
+
+
+
         # depth_numpy_image = ros_numpy.image.image_to_numpy(depth_image_msg)
         color_numpy_image = self.bridge.imgmsg_to_cv2(color_image_msg, 'passthrough') / 255
         depth_numpy_image = self.bridge.imgmsg_to_cv2(depth_image_msg, 'passthrough')
+        print('color_numpy_image: ', color_numpy_image.shape)
         # print('depth_numpy_image shape: ')
         # print(depth_numpy_image.shape)
 
@@ -514,11 +422,16 @@ class CylinderSegmentation():
         # point_cloud = self.convert_depth_to_point_cloud(depth1)
         point_cloud, pcd_color = self.convert_depth_color_to_point_cloud(depth1,color_numpy_image)
 
+        print('point cloud number: ', point_cloud.shape)
+        # print('point cloud distance: ', point_cloud)
+
         # input("see the whole point cloud without any filtering")
         # self.visualize_point_cloud(point_cloud, show_normal=False)
 
         #################### filter out some background noise ####################
-        point_cloud, pcd_color = self.crop_pcd(point_cloud[:, 2] > 0.9, point_cloud, pcd_color)
+        # point_cloud, pcd_color = self.crop_pcd(point_cloud[:, 2] > 0.9, point_cloud, pcd_color)
+        point_cloud, pcd_color = self.crop_pcd(point_cloud[:, 2] > 0.01, point_cloud, pcd_color)
+
         # input("see the point cloud after filtering those within 1.1m")
         # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False)
         point_cloud, pcd_color = self.crop_pcd(point_cloud[:, 2] < 1.65, point_cloud, pcd_color)
@@ -541,22 +454,24 @@ class CylinderSegmentation():
         # use the filtered plane to segment out objects
         f = open('plane_models.pkl', 'rb')
         plane_models = pickle.load(f)
-        back_model = plane_models['back_plane']
-        side_models = plane_models['side_planes']
+        # back_model = plane_models['back_plane']
+        # side_models = plane_models['side_planes']
         bot_model = plane_models['bot_plane']
         bot_plane = bot_model
-        mask = (point_cloud[:,:3].dot(back_model[:3]) + back_model[3] >= 0.04)
-        mask &= (point_cloud[:,:3].dot(side_models[0][:3]) + side_models[0][3] >= 0.04)
-        mask &= (point_cloud[:,:3].dot(side_models[1][:3]) + side_models[1][3] >= 0.04)
-        mask &= (point_cloud[:,:3].dot(bot_model[:3]) + bot_model[3] >= 0.04)
-        # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~mask)
+        # mask = (point_cloud[:,:3].dot(back_model[:3]) + back_model[3] >= 0.04)
+        # mask &= (point_cloud[:,:3].dot(side_models[0][:3]) + side_models[0][3] >= 0.04)
+        # mask &= (point_cloud[:,:3].dot(side_models[1][:3]) + side_models[1][3] >= 0.04)
+        mask = (point_cloud[:,:3].dot(bot_model[:3]) + bot_model[3] >= self.plane_threshold)
+
+        self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~mask)
+
         point_cloud, pcd_color = self.crop_pcd(mask, point_cloud, pcd_color)
 
         # crop the ceiling
-        mask = (point_cloud[:,:3].dot(bot_plane[:3]) + bot_plane[3] >= 0.5-0.05)
-        mask = ~mask
+        # mask = (point_cloud[:,:3].dot(bot_plane[:3]) + bot_plane[3] >= 0.5-0.05)
+        # mask = ~mask
         # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~mask)
-        point_cloud, pcd_color = self.crop_pcd(mask, point_cloud, pcd_color)
+        # point_cloud, pcd_color = self.crop_pcd(mask, point_cloud, pcd_color)
         
 
         # input("see point cloud after filtering out large planes")

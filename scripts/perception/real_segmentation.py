@@ -26,7 +26,7 @@ import skg
 import pickle
 from pracsys_perception.srv import SegmentationSrv
 import transformations as tf
-
+import trimesh
 ### This file defines the real camera for the purpose of getting the images of the physical camera
 
 class CylinderSegmentation():
@@ -47,7 +47,7 @@ class CylinderSegmentation():
         self.depth_camera_info['width'] = self.camera.info['img_shape'][1]
 
         extrinsics = self.camera.info['extrinsics']
-        self.depth_camera_info['intrinsics'] = np.array(extrinsics)
+        self.depth_camera_info['extrinsics'] = np.array(extrinsics)
 
         # depth_camera_info_msg = rospy.wait_for_message('/camera/aligned_depth_to_color/camera_info', CameraInfo)
         # self.depth_camera_info = dict()
@@ -59,6 +59,16 @@ class CylinderSegmentation():
         # self.depth_camera_info['height'] = depth_camera_info_msg.height        
         # self.depth_camera_info['width'] = depth_camera_info_msg.width
         # print(self.depth_camera_info)
+
+    def convert_pcd_to_indices(self, pcd):
+        height = self.depth_camera_info['height']
+        width = self.depth_camera_info['width']
+        pcd = pcd / pcd[:,2].reshape((-1,1))
+        x = pcd[:,0] * self.depth_camera_info['intrinsics']['fx'] + self.depth_camera_info['intrinsics']['ppx']
+        y = pcd[:,1] * self.depth_camera_info['intrinsics']['fy'] + self.depth_camera_info['intrinsics']['ppy']
+        indices = np.array([y,x]).T
+        indices = np.floor(indices).astype(int)
+        return indices
 
     def segmentation(self, num_objs):
         rospy.wait_for_service("segmentation")
@@ -126,6 +136,9 @@ class CylinderSegmentation():
                 pcd = cylinder_models[i]['pcd']
                 pcd = extrinsics[:3,:3].dot(pcd.T).T + extrinsics[:3,3]
                 cylinder_models[i]['pcd'] = pcd
+                # construct a cylinder mesh
+                mesh = trimesh.primitives.Cylinder(radius=cylinder_models[i]['radius'], height=cylinder_models[i]['height'])
+                cylinder_models[i]['mesh'] = mesh
             return seg_img, cylinder_models
 
         except rospy.ServiceException as e:

@@ -328,18 +328,22 @@ class ExecutionInterface():
     def timer_cb(self, timer):
         color_msg = rospy.wait_for_message('rgb_image', Image, timeout=10)
         depth_msg = rospy.wait_for_message('depth_image', Image, timeout=10)
+        print('obtained color and ddepth')
         seg_msg = rospy.wait_for_message('seg_image', Image, timeout=10)
+        print('obtained seg')
         state_msg = rospy.wait_for_message(
             'robot_state_publisher', RobotState, timeout=10
         )
+        print('obtained state')
 
         self.color_img = self.bridge.imgmsg_to_cv2(color_msg, 'passthrough')
         self.depth_img = self.bridge.imgmsg_to_cv2(depth_msg, 'passthrough')
         self.seg_img = self.bridge.imgmsg_to_cv2(seg_msg, 'passthrough')
         self.get_robot_state(state_msg)
+        print('got robot state')
         attached_obj = self.attached_obj
-        ct = time.strftime("%Y%m%d-%H%M%S")
-        cv2.imwrite(ct + "_img.png", self.color_img)
+        # ct = time.strftime("%Y%m%d-%H%M%S")
+        # cv2.imwrite(ct + "_img.png", self.color_img)
         if attached_obj is not None:
             np.save(
                 ct + "_obj_transform.npy",
@@ -347,13 +351,11 @@ class ExecutionInterface():
             )
 
         # perform perception
+        print('before pipeline_sim...')
         self.perception.pipeline_sim(
             self.color_img,
             self.depth_img,
-            self.seg_img,
-            self.scene.camera,
-            [self.scene.robot.robot_id],
-            self.scene.workspace.component_ids,
+            self.seg_img
         )
         if attached_obj is not None:
             obj = self.perception.objects[self.attached_obj]
@@ -391,7 +393,7 @@ class ExecutionInterface():
             # Read the image into a variable
             img_o3d = render.render_to_image()
             img_o3d = cv2.cvtColor(np.array(img_o3d), cv2.COLOR_RGBA2BGRA)
-            cv2.imwrite(ct + "_recon.png", img_o3d)
+            # cv2.imwrite(ct + "_recon.png", img_o3d)
 
         # if object is attached, then sense the object
         # if attached_obj is not None:

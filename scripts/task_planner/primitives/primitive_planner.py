@@ -242,7 +242,8 @@ class PrimitivePlanner():
         self.execution.timer_cb(None)
 
         v_pcds = []
-        for obj_id, obj in self.perception.objects.items():
+        for obj_id in range(len(self.perception.objects)):
+            obj = self.perception.objects[obj_id]
             v_pcd = obj.sample_conservative_pcd()
             v_pcd = obj.transform[:3, :3].dot(v_pcd.T).T + obj.transform[:3, 3]
             # v_pcd = occlusion.world_in_voxel_rot.dot(v_pcd.T).T + occlusion.world_in_voxel_tran

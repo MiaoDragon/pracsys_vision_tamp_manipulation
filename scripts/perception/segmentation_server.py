@@ -1,17 +1,19 @@
 """
 provide a ROS server to do segmentation work
 """
-from segmentation_from_depth import Segmentation
+from perception.real_segmentation_imp import CylinderSegmentation
 from pracsys_perception.srv import SegmentationSrv,SegmentationSrvResponse
 from pracsys_perception.msg import Cylinder
 from sensor_msgs.msg import PointCloud
 from geometry_msgs.msg import Point32
 import rospy
 import transformations as tf
+from scene.camera import Camera
 
 class SegmentationROSServer:
     def __init__(self):
-        self.seg = Segmentation()
+        camera = Camera()
+        self.seg = CylinderSegmentation(camera)
         self.srv = rospy.Service('segmentation',SegmentationSrv, self.segmentation_cb)
 
 

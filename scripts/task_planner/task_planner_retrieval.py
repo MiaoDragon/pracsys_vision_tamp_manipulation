@@ -20,8 +20,8 @@ import matplotlib.pyplot as plt
 
 from utils.visual_utils import *
 from scene.sim_scene import SimScene
-from perception.perception_system import PerceptionSystem
 from primitives.primitive_planner import PrimitivePlanner
+from perception.perception_system import PerceptionSystem
 from primitives.execution_interface import ExecutionInterface
 
 
@@ -73,6 +73,7 @@ class TaskPlanner():
             occlusion_params,
             object_params,
             target_params,
+            self.scene
         )
 
         execution = ExecutionInterface(self.scene, perception_system)

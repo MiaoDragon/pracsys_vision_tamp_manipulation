@@ -17,14 +17,12 @@ from geometry_msgs.msg import Point
 import cv2
 import open3d as o3d
 
-from rearrangement_system.msg import CylinderCenter
-from rearrangement_system.srv import RoughPoseEstimation, RoughPoseEstimationResponse
 from cv_bridge import CvBridge
 
 import matplotlib.pyplot as plt
 import skg
 import pickle
-from pracsys_perception.srv import SegmentationSrv
+from pracsys_vision_tamp_manipulation.srv import SegmentationSrv
 import transformations as tf
 import trimesh
 ### This file defines the real camera for the purpose of getting the images of the physical camera

@@ -1,0 +1,7 @@
+# This srv file defines the service
+# for rough pose estimation given the detection from the depth image
+# computing centroid
+
+int32 num_objs
+---
+pracsys_perception/Cylinder[] cylinders

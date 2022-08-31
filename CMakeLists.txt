@@ -30,6 +30,7 @@ add_message_files(
   FILES
   RobotState.msg
   PercievedObject.msg
+  Cylinder.msg
 )
 
 add_service_files(
@@ -38,6 +39,7 @@ add_service_files(
   AttachObject.srv
   ExecuteTrajectory.srv
   TaskSolve.srv
+  SegmentationSrv.srv
 )
 
 generate_messages(

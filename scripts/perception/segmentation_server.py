@@ -2,8 +2,8 @@
 provide a ROS server to do segmentation work
 """
 from perception.real_segmentation_imp import CylinderSegmentation
-from pracsys_perception.srv import SegmentationSrv,SegmentationSrvResponse
-from pracsys_perception.msg import Cylinder
+from pracsys_vision_tamp_manipulation.srv import SegmentationSrv,SegmentationSrvResponse
+from pracsys_vision_tamp_manipulation.msg import Cylinder
 from sensor_msgs.msg import PointCloud
 from geometry_msgs.msg import Point32
 import rospy

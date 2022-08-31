@@ -1,0 +1,6 @@
+geometry_msgs/Vector3 mid_center
+float32 radius
+float32 height
+geometry_msgs/Vector3 axis
+geometry_msgs/Transform transform
+sensor_msgs/PointCloud pcd

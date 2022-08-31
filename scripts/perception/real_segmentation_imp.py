@@ -420,6 +420,7 @@ class CylinderSegmentation():
         # cv2.waitKey(0)
 
         # point_cloud = self.convert_depth_to_point_cloud(depth1)
+        print('depth shape: ', depth1.shape)
         point_cloud, pcd_color = self.convert_depth_color_to_point_cloud(depth1,color_numpy_image)
 
         print('point cloud number: ', point_cloud.shape)
@@ -501,7 +502,9 @@ class CylinderSegmentation():
                 break
             print('showing label %d/%d...' % (i,len(top_size_label)))
             mask = (labels == top_size_label[i])
-            if mask.astype(int).sum() < 10:
+            print('total: ', np.size(mask), ' total: ', self.depth_camera_info['height']*self.depth_camera_info['width'])
+            print('ratio: ', mask.astype(int).sum() / (self.depth_camera_info['height']*self.depth_camera_info['width']))
+            if mask.astype(int).sum() / (self.depth_camera_info['height']*self.depth_camera_info['width']) < 0.001:
                 # not enough pcd
                 continue
             total_mask |= mask

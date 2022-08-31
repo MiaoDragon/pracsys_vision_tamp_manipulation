@@ -96,6 +96,7 @@ class CylinderSegmentation():
                 cylinder_i['height'] = height
                 cylinder_i['axis'] = axis
                 cylinder_i['transform'] = transform
+                cylinder_i['shape'] = 'cylinder'
                 pts = resp.cylinders[i].pcd.points
                 pcd = []
                 for j in range(len(pts)):

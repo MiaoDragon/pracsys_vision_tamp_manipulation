@@ -189,15 +189,29 @@ class PrimitivePlanner():
                     workspace=self.scene.workspace,
                     display=False
                 )
+
+                ## reset ##
+                reset_dict_list = self.motion_planner.joint_dict_motion_plan(lift_joint_dict_list2[-1], self.scene.robot.init_joint_dict)
+
                 ## Execute ##
                 print("Succeded to plan move for Object {obj.obj_id}!")
                 self.execution.detach_obj()
                 self.execution.execute_traj(pick_joint_dict_list)
                 self.execution.attach_obj(obj.obj_id)
+                tip_pose = self.scene.robot.get_tip_link_pose(pick_joint_dict_list[-1])
+                obj_rel_pose = np.linalg.inv(tip_pose).dot(obj.transform)
+                # self.scene.robot.attach(obj.obj_id, obj_rel_pose)  # obj_rel_pose: object in gripper
                 self.execution.execute_traj(lift_joint_dict_list)
                 self.execution.execute_traj(place_joint_dict_list)
+                tip_pose = self.scene.robot.get_tip_link_pose(place_joint_dict_list[-1])
+                obj_new_pose = tip_pose.dot(obj_rel_pose)
+                obj.update_transform(obj_new_pose)
+                # update the object mesh model
+                self.execution.update_object_state_from_perception(obj)
                 self.execution.detach_obj()
                 self.execution.execute_traj(lift_joint_dict_list2)
+                self.execution.execute_traj(reset_dict_list)
+
                 return time_info
         return time_info
 
@@ -241,8 +255,13 @@ class PrimitivePlanner():
         print('pipeline_sim...')
         self.execution.timer_cb(None)
 
+        # add the object to pybullet if it is new
+        for obj_id, obj in self.perception.objects.items():
+            self.execution.update_object_state_from_perception(self.perception.objects[obj_id])
+            # self.perception.objects[obj_id].pybullet_id = pid
+
         v_pcds = []
-        for obj_id in range(len(self.perception.objects)):
+        for obj_id, obj in self.perception.objects.items():
             obj = self.perception.objects[obj_id]
             v_pcd = obj.sample_conservative_pcd()
             v_pcd = obj.transform[:3, :3].dot(v_pcd.T).T + obj.transform[:3, 3]

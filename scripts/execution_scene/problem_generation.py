@@ -176,6 +176,10 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
                 z_size = z_scales[np.random.choice(len(z_scales))]
                 if i == 0:
                     x_size = x_scales[0]
+                    z_size = z_scales[0]
+                if i == 1:
+                    x_size = x_scales[-1]
+                    z_size = z_scales[-1]
                 if obj_shape == 'cylinder':
                     y_size = x_size
 

@@ -11,16 +11,17 @@ sys.path.insert(0,'/home/yinglong/Documents/research/task_motion_planning/infras
 import numpy as np
 from utils.visual_utils import *
 import open3d as o3d
-
+import copy
 import trimesh
 DEBUG = False
 
 class ObjectBelief():
-    def __init__(self, obj_id, obj_mesh: trimesh.Trimesh, resol, transform):
+    def __init__(self, obj_id, resol, obj_model):
         """
         initialize the object model to be the bounding box containing the conservative volume of the object
         obj_model: a dictionary recording the shape, and details of the model
         """
+        obj_mesh = copy.deepcopy(obj_model['mesh'])
         bounds = obj_mesh.bounds
         xmin = bounds[0][0]
         xmax = bounds[1][0]
@@ -29,17 +30,9 @@ class ObjectBelief():
         zmin = bounds[0][2]
         zmax = bounds[1][2]
 
-        # TODO: add the object into scene using the mesh model
-        # currently we just add the object into moveit scene
-        # if obj_model['shape'] == 'cylinder':
-        #     # create a cylinder in simulator
-        #     # create a cylinder mesh to access later
-        #     radius = obj_model['radius']
-        #     height = obj_model['height']
-
-        #     pass        
-
         self.obj_mesh = obj_mesh
+        self.obj_shape = obj_model['shape']
+        self.obj_model = obj_model
         pcd = trimesh.sample.volume_mesh(obj_mesh, 2500)
         self.pcd = np.array(pcd)
 
@@ -92,10 +85,13 @@ class ObjectBelief():
         self.world_in_voxel_rot = self.world_in_voxel[:3,:3]
         self.world_in_voxel_tran = self.world_in_voxel[:3,3]
 
-        self.transform = transform  # this is the transform of the mesh, and the pcd, NOT the voxel
+        self.transform = np.array(obj_model['transform'])  # this is the transform of the mesh, and the pcd, NOT the voxel
 
         self.obj_id = obj_id 
+        self.pybullet_id = obj_id
         self.depth_img = None
+        
+
 
     def get_optimistic_model(self):
         return (self.voxel > 0)
@@ -106,8 +102,10 @@ class ObjectBelief():
 
     
     def update_transform(self, transform):
+        del_transform = transform.dot(np.linalg.inv(self.transform))
         self.transform = transform
-        self.world_in_voxel = np.linalg.inv(self.transform)
+        self.voxel_transform = del_transform.dot(self.voxel_transform)
+        self.world_in_voxel = np.linalg.inv(self.voxel_transform)
         self.world_in_voxel_rot = self.world_in_voxel[:3,:3]
         self.world_in_voxel_tran = self.world_in_voxel[:3,3]
 

@@ -22,10 +22,9 @@ class CylinderDataAssociation():
         seg_ids = list(set(seg_img.reshape(-1).tolist()))
         print('segmentation ids: ')
         print(seg_ids)
-        obj_poses = [existing_obj_models[i].transform for i in range(len(existing_obj_models))]
+        obj_poses = [existing_obj_models[i].transform for i in range(len(existing_obj_models))]  # assuming the object id is indexed as [0,1,2,...]
         obj_poses = np.array(obj_poses)
-        obj_ids = np.linspace(0, len(obj_poses), len(obj_poses)).astype(int)
-
+        obj_ids = np.linspace(0, len(obj_poses), len(obj_poses), endpoint=False).astype(int)
         # new_seg_img = np.zeros(seg_img).astype(int) - 1
         new_seg_img = np.array(seg_img).astype(int)
 
@@ -53,7 +52,7 @@ class CylinderDataAssociation():
                 argmin = np.argmin(diff)
                 # if the distance is larger than some threshold, then this is a new object
                 dis_threshold = 0.05
-
+                print('diff_argmin: ', diff[argmin])
                 if diff[argmin] >= dis_threshold:
                     # new object. create a new entry in the object list
                     obj_id = new_obj_id

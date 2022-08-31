@@ -19,7 +19,7 @@ import transformations as tf
 from threading import Thread, Lock
 
 from utils.visual_utils import *
-
+from perception.object_belief import ObjectBelief
 
 class ExecutionInterface():
     """
@@ -50,7 +50,8 @@ class ExecutionInterface():
         depth_sub = message_filters.Subscriber('depth_image', Image)
         seg_sub = message_filters.Subscriber('seg_image', Image)
         state_sub = message_filters.Subscriber('robot_state_publisher', RobotState)
-        obj_sub = message_filters.Subscriber('object_state', PercievedObject)
+        # obj_sub = message_filters.Subscriber('object_state', PercievedObject)
+
         # ts = message_filters.ApproximateTimeSynchronizer(
         #     [color_sub, depth_sub, seg_sub, state_sub],
         #     5,
@@ -67,13 +68,15 @@ class ExecutionInterface():
         # add a lock
         # self.lock = Lock()
 
-        ts2 = message_filters.ApproximateTimeSynchronizer(
-            [obj_sub],
-            1,
-            0.001,
-            allow_headerless=True,
-        )
-        ts2.registerCallback(self.update_object_state)
+        # ts2 = message_filters.ApproximateTimeSynchronizer(
+        #     [obj_sub],
+        #     1,
+        #     0.001,
+        #     allow_headerless=True,
+        # )
+        # ts2.registerCallback(self.update_object_state)
+        # state_sub = rospy.Subscriber('robot_state_publisher', RobotState, self.get_robot_state)
+
 
     def execute_traj(self, joint_dict_list, ignored_obj_id=-1, duration=0.001):
         """
@@ -140,7 +143,7 @@ class ExecutionInterface():
         try:
             attach_object = rospy.ServiceProxy('attach_object', AttachObject)
             resp1 = attach_object(
-                True, self.perception.data_assoc.obj_ids_reverse[obj_id]
+                True, obj_id
             )
             # ee_pose = self.scene.robot.get_tip_link_pose()
             # obtain object pose in ee link
@@ -296,6 +299,33 @@ class ExecutionInterface():
                 physicsClientId=self.scene.robot.pybullet_id,
             )
 
+    def construct_obj_msg(self, obj: ObjectBelief):
+        msg = PercievedObject()
+        msg.name = str(obj.pybullet_id)
+        if obj.obj_shape == 'cylinder':
+            msg.solid.type = SolidPrimitive.CYLINDER
+            msg.solid.dimensions = [obj.obj_model['height'],obj.obj_model['radius'],0]
+        transform = np.array(obj.transform)
+        position = transform[:3,3]
+        qw,qx,qy,qz = tf.quaternion_from_matrix(transform)
+        msg.pose.position.x = position[0]
+        msg.pose.position.y = position[1]
+        msg.pose.position.z = position[2]
+        
+        msg.pose.orientation.w = qw
+        msg.pose.orientation.x = qx
+        msg.pose.orientation.y = qy
+        msg.pose.orientation.z = qz
+
+        return msg
+        
+        
+        
+    def update_object_state_from_perception(self, obj: ObjectBelief):
+        msg = self.construct_obj_msg(obj)
+        self.update_object_state(msg)
+
+
     def r_index(self, stype):
         return {p.GEOM_CYLINDER: 1}.get(stype, 0)
 
@@ -339,16 +369,11 @@ class ExecutionInterface():
         self.color_img = self.bridge.imgmsg_to_cv2(color_msg, 'passthrough')
         self.depth_img = self.bridge.imgmsg_to_cv2(depth_msg, 'passthrough')
         self.seg_img = self.bridge.imgmsg_to_cv2(seg_msg, 'passthrough')
-        self.get_robot_state(state_msg)
+        # self.get_robot_state(state_msg)
         print('got robot state')
         attached_obj = self.attached_obj
         # ct = time.strftime("%Y%m%d-%H%M%S")
         # cv2.imwrite(ct + "_img.png", self.color_img)
-        if attached_obj is not None:
-            np.save(
-                ct + "_obj_transform.npy",
-                self.perception.objects[self.attached_obj].transform
-            )
 
         # perform perception
         print('before pipeline_sim...')

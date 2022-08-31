@@ -23,8 +23,8 @@ class PerceptionSystem():
         self.object_params = object_params  # resol and scale
         self.target_params = target_params  # for recognizing target object
         self.occlusion = occlusion
-        self.objects = []  # this stores the recognized objects. assuming object ids start from 0
-        self.obj_initial_poses = []  # useful to backpropagate
+        self.objects = {}  # this stores the recognized objects. assuming object ids start from 0
+        self.obj_initial_poses = {}  # useful to backpropagate
         self.sensed_imgs = []
         self.sensed_poses = []
         self.filtered_occluded = None
@@ -53,18 +53,20 @@ class PerceptionSystem():
         obj_ids = []
         obj_models = []
         for obj_id, obj_model in seen_obj_models.items():
-            if obj_id < len(self.objects):
+            if obj_id in self.objects:
                 continue
             obj_ids.append(obj_id)
             obj_models.append(obj_model)
         # sort the object ids so we can add the new objects to the scene
+        print('remaining obj_ids: ')
+        print(obj_ids)
         sort_indices = np.argsort(obj_ids)
         for i in range(len(sort_indices)):
             new_obj_id = obj_ids[sort_indices[i]]
             obj_model = obj_models[sort_indices[i]]
-            obj = ObjectBelief(new_obj_id, obj_model['mesh'], self.object_params['resol'], obj_model['transform'])
-            self.objects.append(obj)
-            self.obj_initial_poses.append(np.array(obj_model['transform']))
+            obj = ObjectBelief(new_obj_id, self.object_params['resol'], obj_model)
+            self.objects[new_obj_id] = obj
+            self.obj_initial_poses[new_obj_id] = np.array(obj_model['transform'])
 
         # * use the images to construct occlusion space
         # get raw occlusion
@@ -74,8 +76,7 @@ class PerceptionSystem():
         obj_pcds = {}
         obj_opt_pcds = {}
         obj_poses = {}
-        for i in range(len(self.objects)):
-            obj = self.objects[i]
+        for i, obj in self.objects.items():
             # for checking occupied space, use conservative volume
             pcd = obj.sample_conservative_pcd(n_sample=10)
             opt_pcd = obj.sample_optimistic_pcd(n_sample=10)
@@ -84,21 +85,18 @@ class PerceptionSystem():
             obj_pcds[i] = pcd
             obj_opt_pcds[i] = opt_pcd
 
-            # obj_poses.append(obj.transform)
-            # obj_pcds.append(pcd)
-            # obj_opt_pcds.append(opt_pcd)
         # label the occlusion
         occlusion_label, occupied_label, occluded_dict, occupied_dict = \
             self.occlusion.label_scene_occlusion(occluded, camera_extrinsics, camera_intrinsics, depth_img.shape,
                                                 obj_poses, obj_pcds, obj_opt_pcds)
 
 
-        colors = [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,0,1],[0,1,1]]
         voxels = []
-        for i in range(len(self.objects)):
+        for i, obj in self.objects.items():
             if occluded_dict[i].astype(int).sum() == 0:
                 continue
-            vis_voxel = visualize_voxel(self.occlusion.voxel_x, self.occlusion.voxel_y, self.occlusion.voxel_z, occluded_dict[i], colors[i])
+            color = from_color_map(i, 16)
+            vis_voxel = visualize_voxel(self.occlusion.voxel_x, self.occlusion.voxel_y, self.occlusion.voxel_z, occluded_dict[i], color)
             voxels.append(vis_voxel)
         o3d.visualization.draw_geometries(voxels)
 
@@ -135,8 +133,7 @@ class PerceptionSystem():
         obj_poses = {}
         obj_opt_pcds = {}
         obj_conserv_pcds = {}
-        for i in range(len(self.objects)):
-            obj = self.objects[i]
+        for i, obj in self.objects.items():
             obj_poses[i] = self.obj_initial_poses[i]
             pcd = self.objects[i].sample_optimistic_pcd(n_sample=10)
             obj_opt_pcds[i] = pcd
@@ -162,8 +159,7 @@ class PerceptionSystem():
                 opt_occupied_label[opt_occupied] = obj_id+1
 
 
-            for obj_id in range(len(self.objects)):
-                obj = self.objects[obj_id]
+            for obj_id, obj in self.objects.items():
                 pcd = np.array([obj.voxel_x, obj.voxel_y, obj.voxel_z]).transpose([1,2,3,0])
                 pcd = np.array([pcd,pcd,pcd,pcd,pcd,pcd,pcd,pcd,pcd,pcd]).transpose(1,2,3,0,4)
                 ori_pcd = np.array(pcd).astype(int).reshape(-1,3)
@@ -215,7 +211,7 @@ class PerceptionSystem():
         robot_ids = [scene.robot.robot_id]
         # visualzie segmentation image
 
-        seg_img, sensed_obj_models = self.segmentation.segmentation(num_objs=5)
+        seg_img, sensed_obj_models = self.segmentation.segmentation(num_objs=8)
         # sensed_obj_model: seg_id -> obj_model
 
         # self.target_recognition.set_ground_truth_seg_img(seg_img)

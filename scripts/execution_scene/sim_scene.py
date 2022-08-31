@@ -358,17 +358,32 @@ class ExecutionSystem():
         attach the object closest to the robot
         """
         if req.attach == True:
-            obj_transform = self.get_body_transform(req.obj_id)
+            
+            # * find the object to attach
+            closest_obj_id = self.obj_ids[0]
+            min_d = 1000
+            for obj_id in self.obj_ids:
+                obj_transform = self.get_body_transform(obj_id)
+                # get the current tip pose
+                tip_pose = self.robot.get_tip_link_pose()
+                # find the closest one
+                diff = tip_pose[:3,3] - obj_transform[:3,3]
+                diff = np.linalg.norm(diff)
+                if diff < min_d:
+                    closest_obj_id = obj_id
+                    min_d = diff
+
+            obj_transform = self.get_body_transform(closest_obj_id)
             self.attached_obj_pose = obj_transform
             # obtain relative transform to robot ee
             ee_transform = self.robot.get_tip_link_pose()
             obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
-            self.robot.attach(req.obj_id, obj_rel_transform)
+            self.robot.attach(closest_obj_id, obj_rel_transform)
 
             # initialize delta_transform
             self.ee_transform = ee_transform
             self.obj_delta_transform = np.eye(4)
-            self.attached_obj_id = req.obj_id
+            self.attached_obj_id = closest_obj_id
 
             # compute the ee T obj (pose)
 

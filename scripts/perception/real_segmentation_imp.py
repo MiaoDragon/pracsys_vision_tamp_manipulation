@@ -9,7 +9,7 @@ import IPython
 
 import rospy
 import rospkg
-import ros_numpy
+
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import CameraInfo
 from geometry_msgs.msg import Point
@@ -323,7 +323,6 @@ class CylinderSegmentation():
 
 
         # circle fitting
-        import circle_fit
         # xc, yc, R, var = circle_fit.least_squares_circle(projected_pcd)
 
         R, c = skg.nsphere.nsphere_fit(projected_2d)

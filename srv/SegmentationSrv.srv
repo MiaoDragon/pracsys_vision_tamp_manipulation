@@ -4,4 +4,4 @@
 
 int32 num_objs
 ---
-pracsys_perception/Cylinder[] cylinders
+pracsys_vision_tamp_manipulation/Cylinder[] cylinders

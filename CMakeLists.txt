@@ -60,8 +60,9 @@ catkin_package(
   rospy
   std_msgs
   sensor_msgs
+  shape_msgs
   message_runtime
-)
+  )
 
 ###########
 ## Build ##

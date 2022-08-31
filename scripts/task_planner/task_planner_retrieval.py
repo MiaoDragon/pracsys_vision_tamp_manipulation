@@ -146,7 +146,7 @@ class TaskPlanner():
 
         ### Grasp Sampling Test ###
         print("* Grasp Test *")
-        pose_ind = input("Please Enter Object Id: ")
+        pose_ind = 'q'  # input("Please Enter Object Id: ")
         while pose_ind != 'q':
             try:
                 obj_id = int(pose_ind)
@@ -178,8 +178,6 @@ class TaskPlanner():
                     print(f'{tt}: avg={np.average(tm)} std={np.std(tm)} num={len(tm)}')
                 else:
                     print(f'{tt}: {tm}')
-            # input("Press Enter to reset arm...")
-            # rospy.sleep(0.1)
             plan_reset = self.planner.motion_planner.joint_dict_motion_plan(
                 self.execution.scene.robot.joint_dict,
                 self.execution.scene.robot.init_joint_dict
@@ -189,6 +187,7 @@ class TaskPlanner():
             self.execution.execute_traj(plan_reset)
             self.pipeline_sim()
             dg.gen_graph()
+            dg.update_belief()
             dg.draw_graph()
         ### Pick Test End ###
 

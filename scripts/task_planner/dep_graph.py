@@ -1,0 +1,207 @@
+"""
+Implement the graph representing relationships between objects or regions
+"""
+import copy
+from random import choice
+
+import numpy as np
+import networkx as nx
+from matplotlib.pyplot import show
+
+import cv2
+import pybullet as p
+import open3d as o3d
+
+
+def perturbation(rmin, rmax, amin=0, amax=2 * np.pi):
+    rad = np.random.uniform(rmin, rmax)
+    ang = np.random.uniform(amin, amax)
+    return np.array([rad * np.cos(ang), rad * np.sin(ang)])
+
+
+class DepGraph():
+
+    def __init__(
+        self,
+        perception,
+        execution,
+    ):
+
+        self.execution = execution
+        self.perception = perception
+        self.pybullet_id = self.execution.scene.robot.pybullet_id
+        self.target_id = None
+        self.temp_target_id = None
+        self.gen_graph()
+        candidates = list(
+            filter(
+                lambda n: n[1] == 'H',
+                self.gt_graph.nodes(data="dname"),
+            )
+        )
+        candidates = candidates if candidates else list(self.gt_graph.nodes(data="dname"))
+        self.target_id, self.target_dname = choice(candidates)
+        self.gt_graph.nodes[self.target_id]['dname'] = 'T.' + self.target_dname
+
+    def gen_graph(self):
+        self.local2perception = {
+            v: str(self.perception.data_assoc.obj_ids.get(int(k), 'H'))
+            for k, v in self.execution.object_local_id_dict.items()
+        }
+
+        self.gt_graph = nx.DiGraph()
+        self.graph = nx.DiGraph()
+
+        num_obj_ignore = 2  # 0 (robot), 1 (table)
+        for i in range(num_obj_ignore, p.getNumBodies(physicsClientId=self.pybullet_id)):
+            obj_i = p.getBodyUniqueId(i, physicsClientId=self.pybullet_id)
+            obj_pi = self.local2perception[obj_i]
+            # print(obj_pi)
+            if obj_pi != 'H':
+                self.graph.add_node(obj_i, dname=obj_pi)
+            self.gt_graph.add_node(obj_i, dname=obj_pi)
+            for j in range(i + 1, p.getNumBodies(physicsClientId=self.pybullet_id)):
+                obj_j = p.getBodyUniqueId(j, physicsClientId=self.pybullet_id)
+                obj_pj = self.local2perception[obj_j]
+                if obj_pj != 'H':
+                    self.graph.add_node(obj_j, dname=obj_pj)
+                self.gt_graph.add_node(obj_j, dname=obj_pj)
+                contacts = p.getClosestPoints(
+                    obj_i,
+                    obj_j,
+                    distance=0.002,
+                    physicsClientId=self.pybullet_id,
+                )
+                if not contacts:
+                    continue
+                # print(obj_pi, obj_pj, contacts[0][7][2])
+                if obj_pi != 'H' and obj_pj != 'H':
+                    if contacts[0][7][2] < -0.999:
+                        self.graph.add_edge(obj_i, obj_j, etype="below", w=1)
+                    elif contacts[0][7][2] > 0.999:
+                        self.graph.add_edge(obj_j, obj_i, etype="below", w=1)
+                if contacts[0][7][2] < -0.999:
+                    self.gt_graph.add_edge(obj_i, obj_j, etype="below", w=1)
+                elif contacts[0][7][2] > 0.999:
+                    self.gt_graph.add_edge(obj_j, obj_i, etype="below", w=1)
+
+        if self.target_id:
+            self.gt_graph.nodes[self.target_id]['dname'] = \
+                    f"T.{self.gt_graph.nodes[self.target_id]['dname']}"
+            if self.target_id in self.graph.nodes:
+                self.graph.nodes[self.target_id]['dname'] = \
+                        f"T.{self.graph.nodes[self.target_id]['dname']}"
+
+    def update_belief(self):
+        # target visible
+        if self.target_id and self.target_id in self.graph.nodes:
+            return
+
+        # make sure temp node id doesn't conflict with other nodes
+        if self.temp_target_id is None:
+            self.temp_target_id = max(self.gt_graph.nodes) + 1
+
+        # remove previous node/edges if any
+        if self.temp_target_id in self.graph.nodes:
+            self.graph.remove_node(self.temp_target_id)
+        self.graph.add_node(self.temp_target_id, dname='T.H')
+
+        total = 0
+        for v, n in list(self.graph.nodes(data="dname")):
+            # only make edges to source nodes
+            if self.graph.in_degree(v) > 0 or v == self.temp_target_id:
+                continue
+
+            weight = self.heuristic_volume(v, n)
+            if weight == 0:
+                continue
+            total += weight
+            self.graph.add_edge(self.temp_target_id, v, etype="hidden by", w=weight)
+
+        # normalize weights and represent as reciprocal of probability
+        update_weights = {}
+        for v, n in list(self.graph.nodes(data="dname")):
+            edge = (self.temp_target_id, v)
+            if edge not in self.graph.edges:
+                continue
+            w = self.graph.edges[edge]['w']
+            update_weights[edge] = {'w': total / w}
+        nx.set_edge_attributes(self.graph, update_weights)
+
+    def heuristic_volume(self, v, n, visualize=False):
+        '''
+        v <- node id
+        n <- node name
+        '''
+        total_occluded = self.perception.filtered_occlusion_label == int(n) + 1
+        print(n, total_occluded.sum(), total_occluded.any(2).sum())
+        if visualize:
+            free_x, free_y = np.where(total_occluded.any(2))
+            print(free_x, free_y)
+            shape = self.perception.occlusion.occlusion.shape
+            img = 255 * np.ones(shape[0:2]).astype('uint8')
+            img[free_x, free_y] = 0
+            cv2.imshow("Test", img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+        for x in nx.descendants(self.graph, v):
+            o = self.graph.nodes[x]['dname']
+            if o == 'H':
+                print("Error‽")
+            total_occluded |= self.perception.filtered_occlusion_label == int(o) + 1
+
+        print(n, total_occluded.sum(), total_occluded.any(2).sum())
+        if visualize:
+            free_x, free_y = np.where(total_occluded.any(2))
+            print(free_x, free_y)
+            shape = self.perception.occlusion.occlusion.shape
+            img = 255 * np.ones(shape[0:2]).astype('uint8')
+            img[free_x, free_y] = 0
+            cv2.imshow("Test", img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+        return total_occluded.sum()
+
+    def pick_order(self, pick_node):
+        order = nx.dfs_postorder_nodes(self.graph, source=pick_node)
+        ind2name = dict(self.graph.nodes(data="dname"))
+        return [ind2name[v] for v in order]
+
+    def draw_graph(self, ground_truth=False, label="dname"):
+        if ground_truth:
+            graph = self.gt_graph
+        else:
+            graph = self.graph
+
+        pos = nx.nx_pydot.graphviz_layout(
+            graph,
+            # 'fdp',
+            # k=1 / len(graph.nodes),
+            # pos=pos,
+            # fixed=[v for v, d in graph.out_degree if v > 0 and d == 0],
+            # iterations=100
+        )
+        # colors = [
+        #     color if color is not None else [1.0, 1.0, 1.0, 1.0]
+        #     for color in dict(graph.nodes(data="color")).values()
+        # ]
+        nx.draw(graph, pos)  # , node_color=colors)
+        nx.draw_networkx_labels(graph, pos, dict(graph.nodes(data=label)))
+        nx.draw_networkx_edge_labels(
+            graph,
+            pos,
+            {(i, j): t
+             for i, j, t in graph.edges(data="etype")},
+        )
+        nx.draw_networkx_edge_labels(
+            graph,
+            {k: (v[0], v[1] - 10)
+             for k, v in pos.items()},
+            {
+                (i, j): "" if w is None else np.round(w, 2)
+                for i, j, w in graph.edges(data="w")
+            },
+        )
+        show()

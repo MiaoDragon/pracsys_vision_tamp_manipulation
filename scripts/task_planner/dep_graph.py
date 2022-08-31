@@ -1,6 +1,7 @@
 """
 Implement the graph representing relationships between objects or regions
 """
+import time
 import copy
 from random import choice
 
@@ -11,6 +12,9 @@ from matplotlib.pyplot import show
 import cv2
 import pybullet as p
 import open3d as o3d
+
+from utils.transform_utils import *
+from primitives import obj_pose_generation
 
 
 def perturbation(rmin, rmax, amin=0, amax=2 * np.pi):
@@ -32,7 +36,26 @@ class DepGraph():
         self.pybullet_id = self.execution.scene.robot.pybullet_id
         self.target_id = None
         self.temp_target_id = None
+        self.gt_graph = None
+        self.graph = None
+        self.grasps = None
+
+    def first_run(self):
         self.gen_graph()
+        self.select_target()
+        self.gen_grasps()
+        self.update_belief()
+
+    def rerun(self):
+        self.gen_graph()
+        self.gen_grasps()
+        self.update_belief()
+
+    def select_target(self):
+        if self.gt_graph is None:
+            print("Generate dep-graph before selecting target.")
+            return
+
         candidates = list(
             filter(
                 lambda n: n[1] == 'H',
@@ -92,6 +115,46 @@ class DepGraph():
                 self.graph.nodes[self.target_id]['dname'] = \
                         f"T.{self.graph.nodes[self.target_id]['dname']}"
 
+    def gen_grasps(self, pre_grasp_dist=0.02):
+        robot = self.execution.scene.robot
+        time_info = {}
+
+        # pre compute object grasps for visible objects
+        self.grasps = {}
+        for obj_local_id, obj_perc_id in self.local2perception.items():
+            if obj_perc_id == 'H':
+                continue
+            t0 = time.time()
+            grasp_poses = obj_pose_generation.geometric_gripper_grasp_pose_generation(
+                obj_local_id,
+                robot,
+                self.execution.scene.workspace,
+                offset2=(0, 0, -pre_grasp_dist),
+            )
+            t1 = time.time()
+            add2dict(time_info, 'grasps_gen', [t1 - t0])
+            print("Grasp Generation Time: ", time_info['grasps_gen'][-1])
+            self.grasps[obj_local_id] = grasp_poses
+
+            # continue if there are no blocking objects
+            if len(grasp_poses[0]['collisions']) == 0:
+                continue
+
+            # add edges for each blocking object
+            edges_to_add = {}
+            total = 0
+            for poseInfo in grasp_poses:
+                for obj_col_id in poseInfo['collisions']:
+                    add2dict(edges_to_add, (obj_local_id, obj_col_id), 1)
+                    total += 1
+                    # print(obj_local_id, obj_col_id)
+            for edge, weight in edges_to_add.items():
+                # print(edge, weight)
+                if edge in self.graph.edges:
+                    # print("edge exists")
+                    continue
+                self.graph.add_edge(*edge, etype="grasp blocked by", w=total / weight)
+
     def update_belief(self):
         # target visible
         if self.target_id and self.target_id in self.graph.nodes:
@@ -134,10 +197,9 @@ class DepGraph():
         n <- node name
         '''
         total_occluded = self.perception.filtered_occlusion_label == int(n) + 1
-        print(n, total_occluded.sum(), total_occluded.any(2).sum())
         if visualize:
+            print(n, total_occluded.sum(), total_occluded.any(2).sum())
             free_x, free_y = np.where(total_occluded.any(2))
-            print(free_x, free_y)
             shape = self.perception.occlusion.occlusion.shape
             img = 255 * np.ones(shape[0:2]).astype('uint8')
             img[free_x, free_y] = 0
@@ -151,10 +213,9 @@ class DepGraph():
                 print("Error‽")
             total_occluded |= self.perception.filtered_occlusion_label == int(o) + 1
 
-        print(n, total_occluded.sum(), total_occluded.any(2).sum())
         if visualize:
+            print(n, total_occluded.sum(), total_occluded.any(2).sum())
             free_x, free_y = np.where(total_occluded.any(2))
-            print(free_x, free_y)
             shape = self.perception.occlusion.occlusion.shape
             img = 255 * np.ones(shape[0:2]).astype('uint8')
             img[free_x, free_y] = 0

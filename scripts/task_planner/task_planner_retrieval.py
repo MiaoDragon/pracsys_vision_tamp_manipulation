@@ -78,11 +78,14 @@ class TaskPlanner():
 
         execution = ExecutionInterface(self.scene, perception_system)
 
-        planner = PrimitivePlanner(self.scene, perception_system, execution)
+        dep_graph = DepGraph(perception_system, execution)
+
+        planner = PrimitivePlanner(self.scene, perception_system, execution, dep_graph)
 
         self.perception = perception_system
-        self.planner = planner
         self.execution = execution
+        self.planner = planner
+        self.dep_graph = dep_graph
 
         self.perception_time = 0.0
         self.motion_planning_time = 0.0
@@ -139,10 +142,10 @@ class TaskPlanner():
                 )
             )
 
-        dg = DepGraph(self.perception, self.execution)
-        self.execution.target_obj_id = dg.target_id
-        # dg.draw_graph()
-        dg.draw_graph(True)
+        self.dep_graph.first_run()
+        self.execution.target_obj_id = self.dep_graph.target_id
+        # self.dep_graph.draw_graph()
+        self.dep_graph.draw_graph(True)
 
         ### Grasp Sampling Test ###
         print("* Grasp Test *")
@@ -159,7 +162,7 @@ class TaskPlanner():
             pose_ind = input("Please Enter Object Id: ")
         ### Grasp Sampling Test End ###
 
-        dg.draw_graph()
+        self.dep_graph.draw_graph()
         ### Pick & Place Test ###
         print("* Pick & Place Test *")
         pose_ind = 'start'
@@ -186,9 +189,8 @@ class TaskPlanner():
                 continue
             self.execution.execute_traj(plan_reset)
             self.pipeline_sim()
-            dg.gen_graph()
-            dg.update_belief()
-            dg.draw_graph()
+            self.dep_graph.rerun()
+            self.dep_graph.draw_graph()
         ### Pick Test End ###
 
 

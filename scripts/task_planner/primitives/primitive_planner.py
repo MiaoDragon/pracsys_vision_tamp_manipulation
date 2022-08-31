@@ -25,7 +25,7 @@ from motion_planner.motion_planner import MotionPlanner
 
 class PrimitivePlanner():
 
-    def __init__(self, scene, perception_system, execution):
+    def __init__(self, scene, perception_system, execution, dep_graph):
         """
         Create a PyBullet scene including workspace, robot and camera
         """
@@ -34,6 +34,7 @@ class PrimitivePlanner():
         self.scene = scene
         self.perception = perception_system
         self.execution = execution
+        self.dep_graph = dep_graph
         self.motion_planner = motion_planner
         self.rearrange_planner = Rearrangement()
         self.scene.robot.set_motion_planner(motion_planner)
@@ -60,12 +61,15 @@ class PrimitivePlanner():
 
         ## Generate Grasps ##
         t0 = time.time()
-        filteredPoses = obj_pose_generation.geometric_gripper_grasp_pose_generation(
-            obj_local_id,
-            robot,
-            self.scene.workspace,
-            offset2=(0, 0, -pre_grasp_dist),
-        )
+        if self.dep_graph and self.dep_graph.grasps and obj_local_id in self.dep_graph.grasps:
+            filteredPoses = self.dep_graph.grasps[obj_local_id]
+        else:
+            filteredPoses = obj_pose_generation.geometric_gripper_grasp_pose_generation(
+                obj_local_id,
+                robot,
+                self.scene.workspace,
+                offset2=(0, 0, -pre_grasp_dist),
+            )
         t1 = time.time()
         time_info['grasps_gen'] = t1 - t0
         print("Grasp Generation Time: ", time_info['grasps_gen'])

@@ -511,7 +511,7 @@ class CylinderSegmentation():
             pcd_i, color_i = self.crop_pcd(mask, point_cloud, pcd_color)
             mid_center, R, height, axis, rot_mat, cylinder = self.fit_cylinder(pcd_i, bot_plane[:3])
             cylinders.append(cylinder)
-            cylinder_model = {'mid_center': mid_center, 'radius': R, 'height': height, 'axis': axis, 'transform': rot_mat, 'pcd': np.array(pcd_i)}
+            cylinder_model = {'mid_center': mid_center, 'radius': R, 'height': height, 'axis': axis, 'transform': rot_mat, 'pcd': np.array(pcd_i), 'color':np.mean(color_i,axis=0)}
             cylinder_models.append(cylinder_model)
 
             # input('show next label...')

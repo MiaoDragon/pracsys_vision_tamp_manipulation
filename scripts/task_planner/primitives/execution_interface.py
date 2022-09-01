@@ -45,7 +45,7 @@ class ExecutionInterface():
         }
         self.object_state_msg = {}
         self.debug_texts = {}
-        self.target_obj_id = -1
+        # self.target_obj_id = -1
 
         # for updating information
         self.current_robot_state = self.scene.robot.joint_dict
@@ -298,8 +298,11 @@ class ExecutionInterface():
                 physicsClientId=self.scene.robot.pybullet_id,
             )
         ### debug visualization ###
-        p_name = str(self.perception.data_assoc.obj_ids.get(int(msg.name), 'H'))
-        if self.object_local_id_dict[msg.name] == self.target_obj_id:
+        # p_name = str(self.perception.data_assoc.obj_ids.get(int(msg.name), 'H'))
+        p_name = msg.name
+        # if self.object_local_id_dict[msg.name] == self.target_obj_id:
+        # target is red...
+        if msg.color[0] > 200 and msg.color[1] < 100 and msg.color[2] < 100:
             p_name = 'T.' + p_name
         x_pos = 0.5 * msg.solid.dimensions[self.r_index(
             self.shape_type_dict[msg.solid.type]
@@ -340,6 +343,7 @@ class ExecutionInterface():
     def construct_obj_msg(self, obj: ObjectBelief):
         msg = PercievedObject()
         msg.name = str(obj.pybullet_id)
+        msg.color = obj.color
         if obj.obj_shape == 'cylinder':
             msg.solid.type = SolidPrimitive.CYLINDER
             msg.solid.dimensions = [obj.obj_model['height'], obj.obj_model['radius'], 0]

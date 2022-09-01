@@ -36,13 +36,13 @@ class DepGraph():
         self.pybullet_id = self.execution.scene.robot.pybullet_id
         self.target_id = None
         self.temp_target_id = None
-        self.gt_graph = None
+        # self.gt_graph = None
         self.graph = None
         self.grasps = None
 
     def first_run(self):
         self.gen_graph()
-        self.select_target()
+        # self.select_target()
         self.gen_grasps()
         self.update_belief()
 
@@ -51,28 +51,31 @@ class DepGraph():
         self.gen_grasps()
         self.update_belief()
 
-    def select_target(self):
-        if self.gt_graph is None:
-            print("Generate dep-graph before selecting target.")
-            return
-
-        candidates = list(
-            filter(
-                lambda n: n[1] == 'H',
-                self.gt_graph.nodes(data="dname"),
-            )
-        )
-        candidates = candidates if candidates else list(self.gt_graph.nodes(data="dname"))
-        self.target_id, self.target_dname = choice(candidates)
-        self.gt_graph.nodes[self.target_id]['dname'] = 'T.' + self.target_dname
+    # def select_target(self):
+    #     if self.gt_graph is None:
+    #         print("Generate dep-graph before selecting target.")
+    #         return
+    #     candidates = list(
+    #         filter(
+    #             lambda n: n[1] == 'H',
+    #             self.gt_graph.nodes(data="dname"),
+    #         )
+    #     )
+    #     candidates = candidates if candidates else list(self.gt_graph.nodes(data="dname"))
+    #     self.target_id, self.target_dname = choice(candidates)
+    #     self.gt_graph.nodes[self.target_id]['dname'] = 'T.' + self.target_dname
 
     def gen_graph(self):
+        # self.local2perception = {
+        #     v: str(self.perception.data_assoc.obj_ids.get(int(k), 'H'))
+        #     for k, v in self.execution.object_local_id_dict.items()
+        # }
         self.local2perception = {
-            v: str(self.perception.data_assoc.obj_ids.get(int(k), 'H'))
+            v: k
             for k, v in self.execution.object_local_id_dict.items()
         }
 
-        self.gt_graph = nx.DiGraph()
+        # self.gt_graph = nx.DiGraph()
         self.graph = nx.DiGraph()
 
         num_obj_ignore = 2  # 0 (robot), 1 (table)
@@ -81,14 +84,18 @@ class DepGraph():
             obj_pi = self.local2perception[obj_i]
             # print(obj_pi)
             if obj_pi != 'H':
+                if int(obj_pi) == self.perception.target_obj:
+                    self.target_id = obj_i
                 self.graph.add_node(obj_i, dname=obj_pi)
-            self.gt_graph.add_node(obj_i, dname=obj_pi)
+            # self.gt_graph.add_node(obj_i, dname=obj_pi)
             for j in range(i + 1, p.getNumBodies(physicsClientId=self.pybullet_id)):
                 obj_j = p.getBodyUniqueId(j, physicsClientId=self.pybullet_id)
                 obj_pj = self.local2perception[obj_j]
                 if obj_pj != 'H':
+                    if int(obj_pj) == self.perception.target_obj:
+                        self.target_id = obj_j
                     self.graph.add_node(obj_j, dname=obj_pj)
-                self.gt_graph.add_node(obj_j, dname=obj_pj)
+                # self.gt_graph.add_node(obj_j, dname=obj_pj)
                 contacts = p.getClosestPoints(
                     obj_i,
                     obj_j,
@@ -103,14 +110,14 @@ class DepGraph():
                         self.graph.add_edge(obj_i, obj_j, etype="below", w=1)
                     elif contacts[0][7][2] > 0.999:
                         self.graph.add_edge(obj_j, obj_i, etype="below", w=1)
-                if contacts[0][7][2] < -0.999:
-                    self.gt_graph.add_edge(obj_i, obj_j, etype="below", w=1)
-                elif contacts[0][7][2] > 0.999:
-                    self.gt_graph.add_edge(obj_j, obj_i, etype="below", w=1)
+                # if contacts[0][7][2] < -0.999:
+                #     self.gt_graph.add_edge(obj_i, obj_j, etype="below", w=1)
+                # elif contacts[0][7][2] > 0.999:
+                #     self.gt_graph.add_edge(obj_j, obj_i, etype="below", w=1)
 
         if self.target_id:
-            self.gt_graph.nodes[self.target_id]['dname'] = \
-                    f"T.{self.gt_graph.nodes[self.target_id]['dname']}"
+            # self.gt_graph.nodes[self.target_id]['dname'] = \
+            #         f"T.{self.gt_graph.nodes[self.target_id]['dname']}"
             if self.target_id in self.graph.nodes:
                 self.graph.nodes[self.target_id]['dname'] = \
                         f"T.{self.graph.nodes[self.target_id]['dname']}"
@@ -165,7 +172,7 @@ class DepGraph():
 
         # make sure temp node id doesn't conflict with other nodes
         if self.temp_target_id is None:
-            self.temp_target_id = max(self.gt_graph.nodes) + 1
+            self.temp_target_id = 101
 
         # remove previous node/edges if any
         if self.temp_target_id in self.graph.nodes:
@@ -234,10 +241,10 @@ class DepGraph():
         return [ind2name[v] for v in order]
 
     def draw_graph(self, ground_truth=False, label="dname"):
-        if ground_truth:
-            graph = self.gt_graph
-        else:
-            graph = self.graph
+        # if ground_truth:
+        #     graph = self.gt_graph
+        # else:
+        graph = self.graph
 
         pos = nx.nx_pydot.graphviz_layout(
             graph,

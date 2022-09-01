@@ -116,9 +116,9 @@ class TaskPlanner():
 
     def run_pipeline(self, ):
         self.dep_graph.first_run()
-        self.execution.target_obj_id = self.dep_graph.target_id
+        # self.execution.target_obj_id = self.dep_graph.target_id
         # self.dep_graph.draw_graph()
-        self.dep_graph.draw_graph(True)
+        # self.dep_graph.draw_graph(True)
 
         ### Grasp Sampling Test ###
         print("* Grasp Test *")

@@ -8,3 +8,5 @@ geometry_msgs/Pose pose
 uint8 type
 shape_msgs/Mesh mesh
 shape_msgs/SolidPrimitive solid
+
+uint8[] color

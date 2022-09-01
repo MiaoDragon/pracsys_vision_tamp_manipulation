@@ -4,3 +4,4 @@ float32 height
 geometry_msgs/Vector3 axis
 geometry_msgs/Transform transform
 sensor_msgs/PointCloud pcd
+uint8[] color

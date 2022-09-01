@@ -35,6 +35,7 @@ class PerceptionSystem():
         self.scene = scene
         self.data_assoc = CylinderDataAssociation(object_params)
         self.segmentation = CylinderSegmentation(scene.camera)
+        self.target_obj = None
         
     def perceive(self, depth_img, color_img, seg_img, seen_obj_models: dict):
         """
@@ -65,6 +66,8 @@ class PerceptionSystem():
             new_obj_id = obj_ids[sort_indices[i]]
             obj_model = obj_models[sort_indices[i]]
             obj = ObjectBelief(new_obj_id, self.object_params['resol'], obj_model)
+            if obj.color[0] > 200 and obj.color[1] < 100 and obj.color[2] < 100:
+                self.target_obj = new_obj_id
             self.objects[new_obj_id] = obj
             self.obj_initial_poses[new_obj_id] = np.array(obj_model['transform'])
 

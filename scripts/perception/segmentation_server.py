@@ -19,7 +19,7 @@ class SegmentationROSServer:
 
     def segmentation_cb(self, req):
         cylinder_models = self.seg.estimate(req.num_objs)
-        
+
         cylinders = []
         for i in range(len(cylinder_models)):
             cylinder_i = Cylinder()
@@ -42,6 +42,11 @@ class SegmentationROSServer:
             cylinder_i.transform.translation.x = transform[0,3]
             cylinder_i.transform.translation.y = transform[1,3]
             cylinder_i.transform.translation.z = transform[2,3]
+            cylinder_i.color = [
+                cylinder_models[i]['color'][0],
+                cylinder_models[i]['color'][1],
+                cylinder_models[i]['color'][2],
+            ]
 
             cylinder_i.pcd.points
             pts = []

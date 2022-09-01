@@ -47,7 +47,7 @@ class ObjectBelief():
         size_x = int(np.ceil((xmax - xmin) / resol[0]))
         size_y = int(np.ceil((ymax - ymin) / resol[1]))
         size_z = int(np.ceil((zmax - zmin) / resol[2]))
-        
+
         self.xmax = xmin + size_x * resol[0]
         self.ymax = ymin + size_y * resol[1]
         self.zmax = zmin + size_z * resol[2]
@@ -59,7 +59,7 @@ class ObjectBelief():
         self.size_x = size_x
         self.size_y = size_y
         self.size_z = size_z
-        
+
         self.voxel_default = 0#-np.inf
         self.voxel = np.zeros((size_x,size_y,size_z)) + self.voxel_default  # default value: -1
 
@@ -87,20 +87,20 @@ class ObjectBelief():
 
         self.transform = np.array(obj_model['transform'])  # this is the transform of the mesh, and the pcd, NOT the voxel
 
-        self.obj_id = obj_id 
+        self.obj_id = obj_id
         self.pybullet_id = obj_id
         self.depth_img = None
-        
+        self.color = obj_model['color']
 
 
     def get_optimistic_model(self):
         return (self.voxel > 0)
-    
+
     def get_conservative_model(self):
         # unseen parts below to the conservative model
         return (self.voxel > 0)
 
-    
+
     def update_transform(self, transform):
         del_transform = transform.dot(np.linalg.inv(self.transform))
         self.transform = transform
@@ -144,7 +144,7 @@ class ObjectBelief():
         transform[:3,:3] = np.eye(3)
         transform[:2,3] = -midpoint[:2]
         return transform
-    
+
     def get_net_transform_from_center_frame(self, pcd, transform):
         """
         given transform from center to world, get the net transform

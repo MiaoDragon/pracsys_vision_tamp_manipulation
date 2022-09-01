@@ -125,56 +125,42 @@ class CylinderSegmentation():
     def filter_plane(self, point_cloud, pcd_color):
         """
         filter out the back plane, the side planes and the bottom plane
+        For confined space
         """
         ### filter out three largest planes which represent known background 
         point_cloud = np.array(point_cloud)
         pcd_color = np.array(pcd_color)
         plane_models = []
-        print('point cloud: ')
-        print(point_cloud)
+        for i in range(4):
+            keep_mask, plane_model = self.filter_largest_plane(point_cloud)
+            self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~keep_mask)
+            point_cloud, pcd_color = self.crop_pcd(keep_mask, point_cloud, pcd_color)
+            plane_models.append(plane_model)
+        
+        # find the back plane normal, which is close to z axis of the camera frame
+        plane_models = np.array(plane_models)
+        z_axis = np.array([0,0,-1.])
+        idx_back = plane_models[:,:3].dot(z_axis).argmax()
+        back_model = np.array(plane_models[idx_back])
+        # find the side plane normal, which are the closest pairs
+        plane_models = np.delete(plane_models, idx_back, 0)
 
-        keep_mask, plane_model = self.filter_largest_plane(point_cloud)
-        if plane_model[1] > 0:
-            plane_model[0] = -plane_model[0]
-            plane_model[1] = -plane_model[1]
-            plane_model[2] = -plane_model[2]
-            plane_model[3] = -plane_model[3]
-        print('upated plane model: ', plane_model)
-
-        self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~keep_mask)
-        point_cloud, pcd_color = self.crop_pcd(keep_mask, point_cloud, pcd_color)
-        plane_models.append(plane_model)
-
-
-        if False:
-            # NOTE: in shelf, there are four planes. If table-top there is only one plane
-
-            # find the back plane normal, which is close to z axis of the camera frame
-            plane_models = np.array(plane_models)
-            z_axis = np.array([0,0,-1.])
-            idx_back = plane_models[:,:3].dot(z_axis).argmax()
-            back_model = np.array(plane_models[idx_back])
-            # find the side plane normal, which are the closest pairs
-            plane_models = np.delete(plane_models, idx_back, 0)
-
-            max_pair1 = -1
-            max_pair2 = -1
-            max_v = -1
-            for i in range(3):
-                for j in range(i+1,3):
-                    dot = np.abs(plane_models[i,:3].dot(plane_models[j,:3]))
-                    if dot > max_v:
-                        max_v = dot
-                        max_pair1 = i
-                        max_pair2 = j
-            
-            side_models = np.array(plane_models[[max_pair1, max_pair2]])
-            bot_plane = np.delete(plane_models, [max_pair1, max_pair2], 0).reshape(-1)
+        max_pair1 = -1
+        max_pair2 = -1
+        max_v = -1
+        for i in range(3):
+            for j in range(i+1,3):
+                dot = np.abs(plane_models[i,:3].dot(plane_models[j,:3]))
+                if dot > max_v:
+                    max_v = dot
+                    max_pair1 = i
+                    max_pair2 = j
+        
+        side_models = np.array(plane_models[[max_pair1, max_pair2]])
+        bot_plane = np.delete(plane_models, [max_pair1, max_pair2], 0).reshape(-1)
 
         # store the plane models
-        # plane_dict = {"back_plane": back_model, "side_planes": side_models, "bot_plane": bot_plane}
-        bot_plane = plane_models[0]
-        plane_dict = {"bot_plane": bot_plane}
+        plane_dict = {"back_plane": back_model, "side_planes": side_models, "bot_plane": bot_plane}
         f = open('plane_models.pkl', 'wb')
         pickle.dump(plane_dict, f)
 
@@ -446,30 +432,29 @@ class CylinderSegmentation():
         # self.visualize_point_cloud(point_cloud, show_normal=False)
         ###########################################################################
 
+        
         ### filter out three largest planes which represent known background 
         if filter_plane:
             self.filter_plane(point_cloud, pcd_color)
         # use the filtered plane to segment out objects
         f = open('plane_models.pkl', 'rb')
         plane_models = pickle.load(f)
-        # back_model = plane_models['back_plane']
-        # side_models = plane_models['side_planes']
+        back_model = plane_models['back_plane']
+        side_models = plane_models['side_planes']
         bot_model = plane_models['bot_plane']
         bot_plane = bot_model
-        # mask = (point_cloud[:,:3].dot(back_model[:3]) + back_model[3] >= 0.04)
-        # mask &= (point_cloud[:,:3].dot(side_models[0][:3]) + side_models[0][3] >= 0.04)
-        # mask &= (point_cloud[:,:3].dot(side_models[1][:3]) + side_models[1][3] >= 0.04)
-        mask = (point_cloud[:,:3].dot(bot_model[:3]) + bot_model[3] >= self.plane_threshold)
-
-        self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~mask)
-
+        mask = (point_cloud[:,:3].dot(back_model[:3]) + back_model[3] >= 0.04)
+        mask &= (point_cloud[:,:3].dot(side_models[0][:3]) + side_models[0][3] >= 0.04)
+        mask &= (point_cloud[:,:3].dot(side_models[1][:3]) + side_models[1][3] >= 0.04)
+        mask &= (point_cloud[:,:3].dot(bot_model[:3]) + bot_model[3] >= 0.04)
+        # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~mask)
         point_cloud, pcd_color = self.crop_pcd(mask, point_cloud, pcd_color)
 
         # crop the ceiling
-        # mask = (point_cloud[:,:3].dot(bot_plane[:3]) + bot_plane[3] >= 0.5-0.05)
-        # mask = ~mask
+        mask = (point_cloud[:,:3].dot(bot_plane[:3]) + bot_plane[3] >= 0.5-0.05)
+        mask = ~mask
         # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=~mask)
-        # point_cloud, pcd_color = self.crop_pcd(mask, point_cloud, pcd_color)
+        point_cloud, pcd_color = self.crop_pcd(mask, point_cloud, pcd_color)
         
 
         # input("see point cloud after filtering out large planes")

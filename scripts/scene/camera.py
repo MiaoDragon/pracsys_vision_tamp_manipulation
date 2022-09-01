@@ -3,20 +3,25 @@ import numpy as np
 import pybullet as p
 import transformations as tf
 import time
+import cv2
 
 class Camera():
-    def __init__(self, cam_pos=[0.45,0.0,1.1], look_at=[1.5,0,1.15], fov=120, far=1.2, img_size=320, visualize=False):
+    def __init__(self, cam_pos=[0.39,0.0,1.3], look_at=[1.44,0,0.7], s=None, up_vec=None, fov=[90,90], far=1.2, img_size=[320,320], camera_intrinsics=None, visualize=False):
         # TODO: parameterize the camera position
         # cam_pos = np.array([0.39, 0., 1.3])
         # look_at = np.array([1.44, 0., 0.7])
+        
+
+        # right_vector: R, up_vector: G, direction: B
         cam_pos = np.array(cam_pos)
         look_at = np.array(look_at)
-        
-        if cam_pos[1] == 0.0 and look_at[1] == 0.0:
-            up_vec = np.array([cam_pos[2]-look_at[2], 0., look_at[0]-cam_pos[0]])
-        else:
-            s = np.array([cam_pos[1]-look_at[1], look_at[0]-cam_pos[0], 0])
-            up_vec = -np.cross(cam_pos, s)
+
+        if up_vec is None:
+            if cam_pos[1] == 0.0 and look_at[1] == 0.0:
+                up_vec = np.array([cam_pos[2]-look_at[2], 0., look_at[0]-cam_pos[0]])
+            else:
+                s = np.array([cam_pos[1]-look_at[1], look_at[0]-cam_pos[0], 0])
+                up_vec = -np.cross(cam_pos, s)
 
         # up_vec = np.array([1.25-0.58, 0., 1.35-0.35])
 
@@ -33,9 +38,10 @@ class Camera():
         # img_size = 320
         near = 0.01
         # far = 1.2
+        aspect = fov[0] / fov[1]
         proj_mat = p.computeProjectionMatrixFOV(
-            fov=fov,
-            aspect=1,
+            fov=fov[0],
+            aspect=aspect,
             nearVal=near,
             farVal=far
         )
@@ -60,20 +66,26 @@ class Camera():
         T_mat = tf.inverse_matrix(T_mat)
         # print(T_mat)
 
-        focal = img_size / np.tan(fov * np.pi/180 / 2)/2
-        cam_intrinsics = [[focal, 0, img_size/2],
-                        [0, focal, img_size/2],
-                        [0, 0, 1.]]
+        focal_x = img_size[0] / np.tan(fov[0] * np.pi/180 / 2)/2
+        focal_y = img_size[1] / np.tan(fov[1] * np.pi/180 / 2)/2
+
+        if camera_intrinsics is None:
+
+            cam_intrinsics = [[focal, 0, img_size[0]/2],
+                            [0, focal, img_size[1]/2],
+                            [0, 0, 1.]]
+        else:
+            cam_intrinsics = camera_intrinsics
 
         cam_extrinsics = T_mat  # cam_extrinsics: {world}T{cam}
         self.info = {}
         self.info['view_mat'] = view_mat
         self.info['proj_mat'] = proj_mat
-        self.info['intrinsics'] = np.array(cam_intrinsics)
-        self.info['extrinsics'] = np.array(cam_extrinsics)
+        self.info['intrinsics'] = cam_intrinsics
+        self.info['extrinsics'] = cam_extrinsics
         self.info['factor'] = 1.0  # To be parameterized
         self.info['img_size'] = img_size
-        self.info['img_shape'] = [img_size, img_size]
+        self.info['img_shape'] = [img_size[0], img_size[1]]
         self.info['far'] = far
         self.info['near'] = near
         self.info['pos'] = cam_pos
@@ -118,12 +130,11 @@ class Camera():
         return the pose
         """
         width, height, rgb_img, depth_img, seg_img = p.getCameraImage(
-            width=self.info['img_size'],
-            height=self.info['img_size'],
+            width=self.info['img_shape'][0],
+            height=self.info['img_shape'][1],
             viewMatrix=self.info['view_mat'],
             projectionMatrix=self.info['proj_mat'])
         # cv2.imshow('camera_rgb', rgb_img)
-        rgb_img = rgb_img[:,:,:3]
         depth_img = depth_img / self.info['factor']
         far = self.info['far']
         near = self.info['near']
@@ -163,8 +174,8 @@ class Camera():
         return the pose
         """
         width, height, rgb_img, depth_img, seg_img = p.getCameraImage(
-            width=self.info['img_size'],
-            height=self.info['img_size'],
+            width=self.info['img_shape'][0],
+            height=self.info['img_shape'][1],
             viewMatrix=self.info['view_mat'],
             projectionMatrix=self.info['proj_mat'],
             renderer=renderer)
@@ -175,7 +186,46 @@ class Camera():
         depth_img = far * near / (far-(far-near)*depth_img)
         depth_img[depth_img>=far] = 0.
         depth_img[depth_img<=near]=0.
-        rgb_img = rgb_img[:,:,:3]
-
 
         return rgb_img, depth_img, seg_img
+    
+    def project_pcd(self, pcd, pose):
+        # project the pcd at pose to the camera, and obtain the projected pcd,
+        # and the image indices
+        extrinsics = self.info['extrinsics']
+        intrinsics = self.info['intrinsics']
+        img_size = self.info['img_size']
+        cam_transform = np.linalg.inv(extrinsics)
+        fx = intrinsics[0][0]
+        fy = intrinsics[1][1]
+        cx = intrinsics[0][2]
+        cy = intrinsics[1][2]
+        cam_transform = np.linalg.inv(extrinsics)
+
+        transformed_pcd = pose[:3,:3].dot(pcd.T).T + pose[:3,3]
+        transformed_pcd = cam_transform[:3,:3].dot(transformed_pcd.T).T + cam_transform[:3,3]
+        
+        projected_pcd = np.array(transformed_pcd[:,:2])
+        projected_pcd[:,0] = transformed_pcd[:,0] / transformed_pcd[:,2] * fx + cx
+        projected_pcd[:,1] = transformed_pcd[:,1] / transformed_pcd[:,2] * fy + cy
+
+        return transformed_pcd, projected_pcd
+
+    def generate_depth_img_from_projected_pcd(self, transformed_pcd, projected_pcd):
+        """
+        generate a depth image from the projected pcd. For each pixel,
+        use the closest point to the camera (min depth)
+        """
+        depth = transformed_pcd[:,2]
+        unique_indices = np.unique(projected_pcd, axis=0)
+        unique_valid = (unique_indices[:,0] >= 0) & (unique_indices[:,1] >= 0) & \
+                        (unique_indices[:,0] < self.info['img_shape'][1]) & \
+                        (unique_indices[:,1] < self.info['img_shape'][0])
+        unique_indices = unique_indices[unique_valid]
+        unique_depths = np.zeros(len(unique_indices))
+        for i in range(len(unique_indices)):
+            unique_depths[i] = depth[(projected_pcd[:,0]==unique_indices[i,0])&(projected_pcd[:,1]==unique_indices[i,1])].min()
+        depth_img = np.zeros(self.info['img_shape']).astype(float)
+        depth_img[unique_indices[:,1],unique_indices[:,0]] = unique_depths
+        depth_img = cv2.medianBlur(np.float32(depth_img), 5)
+        return depth_img

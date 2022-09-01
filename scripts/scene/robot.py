@@ -19,8 +19,7 @@ class Robot():
         joint_range,
         tip_link_name,
         ee_params,
-        pybullet_id,
-        active_joint_mask,
+        pybullet_id
     ):
         """
         given the URDF file, the pose of the robot base, and the joint angles,
@@ -87,15 +86,9 @@ class Robot():
         self.init_joint_dict = dict(joint_dict)
 
         self.init_joint_vals_np = np.array(list(joint_vals))
-        self.active_joint_mask = np.array(active_joint_mask).astype(
-            bool
-        )  # mask indicate which joint is active
 
         self.lower_lim = np.array(lower_lim)
         self.upper_lim = np.array(upper_lim)
-
-        self.sample_lower_lim = np.array(lower_lim)[:len(active_joint_mask)]
-        self.sample_upper_lim = np.array(upper_lim)[:len(active_joint_mask)]
 
         self.jr = joint_range
 

@@ -21,8 +21,8 @@ import matplotlib.pyplot as plt
 from dep_graph import DepGraph
 from utils.visual_utils import *
 from scene.sim_scene import SimScene
-from perception.perception_system import PerceptionSystem
 from primitives.primitive_planner import PrimitivePlanner
+from perception.perception_system import PerceptionSystem
 from primitives.execution_interface import ExecutionInterface
 
 
@@ -71,9 +71,7 @@ class TaskPlanner():
         target_params = {'target_pybullet_id': None}
 
         perception_system = PerceptionSystem(
-            occlusion_params,
-            object_params,
-            target_params,
+            occlusion_params, object_params, target_params, self.scene
         )
 
         execution = ExecutionInterface(self.scene, perception_system)
@@ -104,16 +102,16 @@ class TaskPlanner():
         self.num_collision = 0
 
     def pipeline_sim(self):
-        # self.planner.pipeline_sim()
         print("** Perception Started... **")
-        self.perception.pipeline_sim(
-            self.execution.color_img,
-            self.execution.depth_img,
-            self.execution.seg_img,
-            self.execution.scene.camera,
-            [self.execution.scene.robot.robot_id],
-            self.execution.scene.workspace.component_ids,
-        )
+        self.planner.pipeline_sim()
+        # self.perception.pipeline_sim(
+        #     self.execution.color_img,
+        #     self.execution.depth_img,
+        #     self.execution.seg_img,
+        #     self.execution.scene.camera,
+        #     [self.execution.scene.robot.robot_id],
+        #     self.execution.scene.workspace.component_ids,
+        # )
         print("** Perception Done! **")
 
     def run_pipeline(self, ):
@@ -138,6 +136,7 @@ class TaskPlanner():
         ### Grasp Sampling Test End ###
 
         self.dep_graph.draw_graph()
+
         ### Pick & Place Test ###
         print("* Pick & Place Test *")
         pose_ind = 'start'

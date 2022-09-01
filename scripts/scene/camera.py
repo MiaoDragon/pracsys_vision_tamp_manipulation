@@ -69,8 +69,8 @@ class Camera():
         self.info = {}
         self.info['view_mat'] = view_mat
         self.info['proj_mat'] = proj_mat
-        self.info['intrinsics'] = cam_intrinsics
-        self.info['extrinsics'] = cam_extrinsics
+        self.info['intrinsics'] = np.array(cam_intrinsics)
+        self.info['extrinsics'] = np.array(cam_extrinsics)
         self.info['factor'] = 1.0  # To be parameterized
         self.info['img_size'] = img_size
         self.info['img_shape'] = [img_size, img_size]
@@ -123,6 +123,7 @@ class Camera():
             viewMatrix=self.info['view_mat'],
             projectionMatrix=self.info['proj_mat'])
         # cv2.imshow('camera_rgb', rgb_img)
+        rgb_img = rgb_img[:,:,:3]
         depth_img = depth_img / self.info['factor']
         far = self.info['far']
         near = self.info['near']
@@ -174,7 +175,7 @@ class Camera():
         depth_img = far * near / (far-(far-near)*depth_img)
         depth_img[depth_img>=far] = 0.
         depth_img[depth_img<=near]=0.
-
+        rgb_img = rgb_img[:,:,:3]
 
 
         return rgb_img, depth_img, seg_img

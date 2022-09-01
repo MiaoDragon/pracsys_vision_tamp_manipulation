@@ -8,7 +8,7 @@
             "ori": [0,0,0,1]
         },
         "urdfb": "urdf/baxter.urdf",
-        "urdf": "data/models/robot/motoman.urdf"
+        "urdf": "data/models/robot/motoman_dual.urdf"
     },
     "workspace":
     {

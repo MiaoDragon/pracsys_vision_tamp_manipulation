@@ -43,7 +43,7 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
     scene_dict = json.load(f)
 
     rp = rospkg.RosPack()
-    package_path = rp.get_path('vbcpm_execution_system')
+    package_path = rp.get_path('pracsys_ctvmp')
     urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
     # joints = [0.] * 16
 
@@ -139,6 +139,8 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
                 obj_shape = 'wall'
             if i == 0:
                 obj_shape = 'cube'
+
+            obj_shape = 'cylinder'
             # obj_shape = obj_list[i%len(obj_list)]
             # randomly scale the object
             if obj_shape == 'cube':
@@ -150,11 +152,14 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
                 y_scales = np.arange(0.25, 0.40, 0.05) / 10
                 z_scales = np.arange(0.6, 1.0, 0.05) / 10
             elif obj_shape == 'cylinder':
-                x_scales = np.arange(0.25, 0.40, 0.05) / 10
+                # x_scales = np.arange(0.25, 0.40, 0.05) / 10
+                x_scales = np.arange(0.25, 0.60, 0.05) / 10
+
                 y_scales = np.arange(0.25, 0.40, 0.05) / 10
                 z_scales = np.arange(1.0, 1.5, 0.05) / 10
             elif obj_shape == 'wall':
                 x_scales = np.arange(0.25, 0.40, 0.05) / 10
+
                 y_scales = np.arange(1.0, 2.0, 0.05) / 10
                 z_scales = np.arange(1.2, 1.8, 0.05) / 10
 
@@ -169,6 +174,12 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
                 x_size = x_scales[np.random.choice(len(x_scales))]
                 y_size = y_scales[np.random.choice(len(y_scales))]
                 z_size = z_scales[np.random.choice(len(z_scales))]
+                if i == 0:
+                    x_size = x_scales[0]
+                    z_size = z_scales[0]
+                if i == 1:
+                    x_size = x_scales[-1]
+                    z_size = z_scales[-1]
                 if obj_shape == 'cylinder':
                     y_size = x_size
 
@@ -1156,7 +1167,7 @@ def load_problem_level(
     scene_dict = json.load(f)
 
     rp = rospkg.RosPack()
-    package_path = rp.get_path('vbcpm_execution_system')
+    package_path = rp.get_path('pracsys_ctvmp')
     urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
     # joints = [0.] * 16
 

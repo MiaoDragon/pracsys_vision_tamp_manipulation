@@ -3,6 +3,9 @@ simumlated execution scene. Some of it overlaps with the sim_scene defined in sc
 """
 import os
 import sys
+
+sys.path.insert(0,'/home/yinglong/Documents/research/task_motion_planning/infrastructure/motoman_ws/src/pracsys_vision_tamp_manipulation/scripts')
+
 import json
 import pickle
 from threading import Lock
@@ -13,11 +16,11 @@ import rospkg
 from cv_bridge import CvBridge
 from std_msgs.msg import Int32
 from geometry_msgs.msg import Point
-from moveit_commander.conversions import *
+# from moveit_commander.conversions import *
 from sensor_msgs.msg import Image, JointState
 from shape_msgs.msg import SolidPrimitive, Mesh, MeshTriangle
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-
+from geometry_msgs.msg import Pose
 # import problem_generation as prob_gen
 import problem_generation as prob_gen
 from utils.visual_utils import *
@@ -355,17 +358,32 @@ class ExecutionSystem():
         attach the object closest to the robot
         """
         if req.attach == True:
-            obj_transform = self.get_body_transform(req.obj_id)
+            
+            # * find the object to attach
+            closest_obj_id = self.obj_ids[0]
+            min_d = 1000
+            for obj_id in self.obj_ids:
+                obj_transform = self.get_body_transform(obj_id)
+                # get the current tip pose
+                tip_pose = self.robot.get_tip_link_pose()
+                # find the closest one
+                diff = tip_pose[:3,3] - obj_transform[:3,3]
+                diff = np.linalg.norm(diff)
+                if diff < min_d:
+                    closest_obj_id = obj_id
+                    min_d = diff
+
+            obj_transform = self.get_body_transform(closest_obj_id)
             self.attached_obj_pose = obj_transform
             # obtain relative transform to robot ee
             ee_transform = self.robot.get_tip_link_pose()
             obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
-            self.robot.attach(req.obj_id, obj_rel_transform)
+            self.robot.attach(closest_obj_id, obj_rel_transform)
 
             # initialize delta_transform
             self.ee_transform = ee_transform
             self.obj_delta_transform = np.eye(4)
-            self.attached_obj_id = req.obj_id
+            self.attached_obj_id = closest_obj_id
 
             # compute the ee T obj (pose)
 

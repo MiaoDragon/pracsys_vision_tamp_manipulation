@@ -100,7 +100,6 @@ class TaskPlanner():
         self.rearrange_calls = 0
 
         self.pipeline_sim()
-        input('press to start...')
         self.num_executed_actions = 0
         self.num_collision = 0
 
@@ -118,30 +117,6 @@ class TaskPlanner():
         print("** Perception Done! **")
 
     def run_pipeline(self, ):
-        # the following is just for autocompletion
-        if False:
-            from perception.object_belief import ObjectBelief
-            from scene.workspace import Workspace
-            from scene.robot import Robot
-            obj_doc = ObjectBelief()
-            robot_doc = Robot()
-            workspace_doc = Workspace()
-        # comment out above during execution
-
-        start_time = time.time()
-
-        # self.pipeline_sim()
-        for obj_id, obj in self.perception.objects.items():
-            local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
-            print(obj_id, local_id)  #, obj.pybullet_id, local_id)
-            print(
-                p.getCollisionShapeData(
-                    local_id,
-                    -1,
-                    physicsClientId=self.execution.scene.robot.pybullet_id,
-                )
-            )
-
         self.dep_graph.first_run()
         self.execution.target_obj_id = self.dep_graph.target_id
         # self.dep_graph.draw_graph()
@@ -174,7 +149,11 @@ class TaskPlanner():
             except (IndexError, ValueError, KeyError):
                 continue
 
-            time_info = self.planner.TryMoveOneObject(obj)
+            func_choice = input("t -> TryMoveOneObject, m -> MoveOrPlaceback: ")
+            if func_choice == 't':
+                time_info = self.planner.TryMoveOneObject(obj)
+            else:
+                time_info = self.planner.MoveOrPlaceback(obj)
             print("\n\nDone:")
             for tt, tm in time_info.items():
                 if type(tm) == list:
@@ -188,7 +167,8 @@ class TaskPlanner():
             if len(plan_reset) == 0:
                 continue
             self.execution.execute_traj(plan_reset)
-            self.pipeline_sim()
+            if func_choice == 't':
+                self.pipeline_sim()
             self.dep_graph.rerun()
             self.dep_graph.draw_graph()
         ### Pick Test End ###

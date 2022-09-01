@@ -53,6 +53,312 @@ class PrimitivePlanner():
         self.num_executed_actions = 0
         self.num_collision = 0
 
+        self.intermediate_joint_dict = self.execution.scene.robot.joint_vals_to_dict(
+            (
+                0.014463338682204323, -4.0716884372437e-05, -0.00056967948338301,
+                -3.003771794272945e-05, -0.001129114022435695, -1.1408804411786207e-05,
+                0.0004592057758004012, 3.0809339998184584e-05, -0.18604427248646432,
+                0.9614386497656244, -0.10507968438009953, -1.702685750483462,
+                -0.017805293683614262, -0.5223902790606496, 3.461813038728145e-05
+            )
+        )
+
+    def MoveOrPlaceback(
+        self,
+        obj,
+        pre_grasp_dist=0.02,
+        lift_height=0.5,
+        pre_place_dist=0.08,
+    ):
+        robot = self.execution.scene.robot
+        obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        time_info = {"success": False}
+        total0 = time.time()
+
+        ## Generate Grasps ##
+        t0 = time.time()
+        if self.dep_graph and self.dep_graph.grasps and obj_local_id in self.dep_graph.grasps:
+            filteredPoses = self.dep_graph.grasps[obj_local_id]
+        else:
+            filteredPoses = obj_pose_generation.geometric_gripper_grasp_pose_generation(
+                obj_local_id,
+                robot,
+                self.scene.workspace,
+                offset2=(0, 0, -pre_grasp_dist),
+            )
+        t1 = time.time()
+        time_info['grasps_gen'] = t1 - t0
+        print("Grasp Generation Time: ", time_info['grasps_gen'])
+
+        # planning for each grasp until success
+        for poseInfo in filteredPoses:
+            if len(poseInfo['collisions']) != 0:
+                break
+
+            ## Set Collision Space ##
+            self.set_collision_env_with_models()
+
+            tpk0 = time.time()
+            ## Plan Pick ##
+            t0 = time.time()
+            pick_joint_dict = robot.joint_vals_to_dict(poseInfo['dof_joints'])
+            pick_joint_dict_list = self.motion_planner.ee_approach_plan(
+                robot.joint_dict,
+                # eof_poses,
+                pick_joint_dict,
+                # robot,
+                disp_dist=pre_grasp_dist,
+                disp_dir=(0, 0, 1),
+                is_pre_dir_abs=False,
+                attached_acos=[],
+            )
+            t1 = time.time()
+            add2dict(time_info, 'pick_plan', [t1 - t0])
+            print("Pick Plan Time: ", time_info['pick_plan'][-1])
+            if not pick_joint_dict_list:
+                tpk1 = time.time()
+                add2dict(time_info, 'total_pick', tpk1 - tpk0)
+                continue
+
+            ## Plan Lift ##
+            new_start_joint_dict = dict(pick_joint_dict_list[-1])
+            pick_tip_pose = robot.get_tip_link_pose(new_start_joint_dict)
+            lift_tip_pose = np.eye(4)
+            lift_tip_pose[:3, 3] = np.array([0, 0, lift_height])
+
+            lift_joint_dict_list = self.motion_planner.straight_line_motion(
+                new_start_joint_dict,
+                pick_tip_pose,
+                lift_tip_pose,
+                robot,
+                collision_check=False,
+                workspace=self.scene.workspace,
+                display=False
+            )
+            tpk1 = time.time()
+            add2dict(time_info, 'total_pick', tpk1 - tpk0)
+            print("Total Place Time: ", time_info['total_pick'])
+
+            ## Plan Intermediate ##
+            t0 = time.time()
+            aco = self.attach_known(obj, robot, new_start_joint_dict)
+            inter_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
+                lift_joint_dict_list[-1],
+                self.intermediate_joint_dict,
+                attached_acos=[aco],
+            )
+            self.detach_known(obj)
+            t1 = time.time()
+            add2dict(time_info, 'inter_plan', [t1 - t0])
+            print("Intermediate Plan Time: ", time_info['inter_plan'][-1])
+            if not inter_joint_dict_list:
+                tpk1 = time.time()
+                add2dict(time_info, 'total_pick', tpk1 - tpk0)
+                continue
+
+            ## Execute Pick ##
+            print(f"Succeded to plan move for Object {obj.obj_id}!")
+            t0 = time.time()
+            self.execution.detach_obj()
+            self.execution.execute_traj(pick_joint_dict_list)
+            self.execution.attach_obj(obj.obj_id)
+            self.execution.execute_traj(lift_joint_dict_list)
+            self.execution.execute_traj(inter_joint_dict_list)
+            t1 = time.time()
+            time_info['execute_pick'] = t1 - t0
+            print("Execute pick time: ", time_info['execute_pick'])
+
+            ## Update Perception ##
+            print("** Perception Started... **")
+            t0 = time.time()
+            self.perception.pipeline_sim(
+                self.execution.color_img,
+                self.execution.depth_img,
+                self.execution.seg_img,
+                self.execution.scene.camera,
+                [self.execution.scene.robot.robot_id],
+                self.execution.scene.workspace.component_ids,
+            )
+            t1 = time.time()
+            time_info['perception'] = t1 - t0
+            print("** Perception Done! (", time_info['perception'], ") **")
+
+            ## Generate Placements ##
+            t0 = time.time()
+            placements = obj_pose_generation.generate_placements(
+                obj,
+                robot,
+                self.execution,
+                self.perception,
+                self.scene.workspace,
+                display=True,
+            )
+            t1 = time.time()
+            time_info['placements_gen'] = t1 - t0
+            print("Placement Generation Time: ", time_info['placements_gen'])
+
+            ## Place ##
+            new_start_joint_dict, grasp_joint_dict = (
+                inter_joint_dict_list[-1],
+                inter_joint_dict_list[-1],
+                # lift_joint_dict_list[-1],
+                # pick_joint_dict_list[-1],
+            )
+            ## random version ##
+            # max_iters = 100
+            # count = 0
+            # while count < max_iters:
+            #     count += 1
+
+            #     # sample placement postition
+            #     t0 = time.time()
+            #     sample_pos = obj_pose_generation.generate_random_placement(
+            #         obj,
+            #         robot,
+            #         self.execution,
+            #         self.perception,
+            #         self.scene.workspace,
+            #     )
+            #     t1 = time.time()
+            #     print("Placement Sample Time: ", t1 - t0)
+
+            # get gripper to object matrix
+            obj_transform = translation_quaternion2homogeneous(
+                *p.getBasePositionAndOrientation(obj_local_id, robot.pybullet_id)
+            )
+            ee_transform = robot.get_tip_link_pose(grasp_joint_dict)
+            obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
+            obj2gripper = np.linalg.inv(obj_rel_transform)
+            shuffle(placements)
+            for sample_pos in placements:
+                tpl0 = time.time()
+
+                # get gripper transform at placement
+                place_obj_transform = translation_quaternion2homogeneous(
+                    sample_pos,
+                    [0, 0, 0, 1],
+                )
+                gripper_transform = place_obj_transform.dot(obj2gripper)
+                pos, rot = homogeneous2translation_quaternion(gripper_transform)
+
+                # check IK
+                t0 = time.time()
+                valid, jointPoses = robot.get_ik(
+                    robot.tip_link_name,
+                    pos,
+                    rot,
+                    robot.init_joint_vals,
+                )
+                t1 = time.time()
+                add2dict(time_info, 'place_ik', [t1 - t0])
+                print("Place IK Time: ", time_info['place_ik'][-1])
+                if not valid:
+                    robot.set_joints_without_memorize(robot.joint_vals)
+                    tpl1 = time.time()
+                    add2dict(time_info, 'total_place', tpl1 - tpl0)
+                    continue
+
+                # check collision
+                t0 = time.time()
+                ignore_ids = [0, robot.robot_id, obj_local_id]
+                collisions = set()
+                for i in range(p.getNumBodies(physicsClientId=robot.pybullet_id)):
+                    obj_pid = p.getBodyUniqueId(i, physicsClientId=robot.pybullet_id)
+                    if obj_pid in ignore_ids:
+                        continue
+                    contacts = p.getClosestPoints(
+                        robot.robot_id,
+                        obj_pid,
+                        distance=0.,
+                        physicsClientId=robot.pybullet_id,
+                    )
+                    if len(contacts):
+                        collisions.add(obj_pid)
+                t1 = time.time()
+                add2dict(time_info, 'place_cc', [t1 - t0])
+                print("Place Collision Check Time: ", time_info['place_cc'][-1])
+                robot.set_joints_without_memorize(robot.joint_vals)
+                if len(collisions) > 0:
+                    # print("ik failed b/c of collisions:", collisions)
+                    tpl1 = time.time()
+                    add2dict(time_info, 'total_place', tpl1 - tpl0)
+                    continue
+
+                ## Plan Place ##
+                t0 = time.time()
+                place_joint_dict = robot.joint_vals_to_dict(jointPoses)
+                aco = self.attach_known(obj, robot, grasp_joint_dict)
+                place_joint_dict_list = self.motion_planner.ee_approach_plan(
+                    new_start_joint_dict,
+                    place_joint_dict,
+                    disp_dist=pre_place_dist,
+                    disp_dir=(0, 0, -1),
+                    is_pre_dir_abs=True,
+                    attached_acos=[aco],
+                )
+                self.detach_known(obj)
+                t1 = time.time()
+                add2dict(time_info, 'place_plan', [t1 - t0])
+                print("Place Plan Time: ", time_info['place_plan'][-1])
+                if not place_joint_dict_list:
+                    tpl1 = time.time()
+                    add2dict(time_info, 'total_place', tpl1 - tpl0)
+                    continue
+
+                ## Plan Lift ##
+                new_start_joint_dict2 = dict(place_joint_dict_list[-1])
+                place_tip_pose = robot.get_tip_link_pose(new_start_joint_dict2)
+                lift_tip_pose = np.eye(4)
+                lift_tip_pose[:3, 3] = np.array([0, 0, 0.06])  # lift up by 0.06
+
+                lift_joint_dict_list2 = self.motion_planner.straight_line_motion(
+                    new_start_joint_dict2,
+                    place_tip_pose,
+                    lift_tip_pose,
+                    robot,
+                    collision_check=False,
+                    workspace=self.scene.workspace,
+                    display=False
+                )
+
+                tpl1 = time.time()
+                add2dict(time_info, 'total_place', tpl1 - tpl0)
+                print("Total Place Time: ", time_info['total_place'])
+
+                ## Execute Place ##
+                print(f"Succeded to plan move for Object {obj.obj_id}!")
+                t0 = time.time()
+                self.execution.execute_traj(place_joint_dict_list)
+                self.execution.detach_obj()
+                self.execution.execute_traj(lift_joint_dict_list2)
+                t1 = time.time()
+                time_info['execute_place'] = t1 - t0
+                print("Execute time: ", time_info['execute_place'])
+                total1 = time.time()
+                time_info['total'] = total1 - total0
+                print("Total time: ", time_info['total'])
+                return time_info
+
+            ## Execute Reverse Pick ##
+            print(f"Failed to plan place for {obj.obj_id}! Putting it back...")
+            t0 = time.time()
+            self.execution.execute_traj(list(reversed(inter_joint_dict_list)))
+            self.execution.execute_traj(list(reversed(lift_joint_dict_list)))
+            self.execution.detach_obj()
+            self.execution.execute_traj(list(reversed(pick_joint_dict_list)))
+            t1 = time.time()
+            time_info['execute_place'] = t1 - t0
+            print("Execute time: ", time_info['execute_place'])
+            total1 = time.time()
+            time_info['total'] = total1 - total0
+            print("Total time: ", time_info['total'])
+            return time_info
+
+        total1 = time.time()
+        time_info['total'] = total1 - total0
+        print("Total time: ", time_info['total'])
+        return time_info
+
     def TryMoveOneObject(self, obj, pre_grasp_dist=0.02, pre_place_dist=0.08):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
@@ -172,8 +478,13 @@ class PrimitivePlanner():
                 tpl0 = time.time()
 
                 # get gripper transform at placement
-                obj_transform[:3, 3] = sample_pos
-                gripper_transform = obj_transform.dot(obj2gripper)
+                # obj_transform[:3, 3] = sample_pos
+                # gripper_transform = obj_transform.dot(obj2gripper)
+                place_obj_transform = translation_quaternion2homogeneous(
+                    sample_pos,
+                    [0, 0, 0, 1],
+                )
+                gripper_transform = place_obj_transform.dot(obj2gripper)
                 pos, rot = homogeneous2translation_quaternion(gripper_transform)
 
                 # check IK
@@ -195,7 +506,7 @@ class PrimitivePlanner():
 
                 # check collision
                 t0 = time.time()
-                ignore_ids = [robot.robot_id]
+                ignore_ids = [0, robot.robot_id, obj_local_id]
                 collisions = set()
                 for i in range(p.getNumBodies(physicsClientId=robot.pybullet_id)):
                     obj_pid = p.getBodyUniqueId(i, physicsClientId=robot.pybullet_id)
@@ -261,7 +572,7 @@ class PrimitivePlanner():
                 print("Total Place Time: ", time_info['total_place'])
 
                 ## Execute ##
-                print("Succeded to plan move for Object {obj.obj_id}!")
+                print(f"Succeded to plan move for Object {obj.obj_id}!")
                 t0 = time.time()
                 self.execution.detach_obj()
                 self.execution.execute_traj(pick_joint_dict_list)
@@ -408,7 +719,19 @@ class PrimitivePlanner():
         obj_abs_transform = ee_transform_now.dot(obj_rel_transform)
         pose = homogeneous2pose_stamped_msg(obj_abs_transform)
         mins, maxs = p.getAABB(obj_local_id, physicsClientId=robot.pybullet_id)
-        size = [cmax - cmin for cmin, cmax in zip(mins, maxs)]
+        # size = [cmax - cmin for cmin, cmax in zip(mins, maxs)]
+        shape = p.getCollisionShapeData(obj_local_id, -1, robot.pybullet_id)[0]
+        if shape[2] == p.GEOM_BOX:
+            size_x = shape[3][0]
+            size_y = shape[3][1]
+            size_z = shape[3][2]
+        elif shape[2] in (p.GEOM_CYLINDER, p.GEOM_CAPSULE):
+            size_x = 2 * shape[3][1]
+            size_y = size_x
+            size_z = shape[3][0]
+        else:
+            print("Unimplemented Shape!")
+        size = (size_x, size_y, size_z)
         return self.motion_planner.attach_known(
             str(obj.pybullet_id), pose=pose, size=size
         )
@@ -495,7 +818,7 @@ class PrimitivePlanner():
             if not valid:
                 robot.set_joints_without_memorize(robot.joint_vals)
                 continue
-            ignore_ids = [robot.robot_id]
+            ignore_ids = [0, robot.robot_id, obj_local_id]
             collisions = set()
             for i in range(p.getNumBodies(physicsClientId=robot.pybullet_id)):
                 obj_pid = p.getBodyUniqueId(i, physicsClientId=robot.pybullet_id)

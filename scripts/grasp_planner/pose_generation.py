@@ -27,14 +27,6 @@ def geometric_suction_grasp_pose_generation(
     - resolution must be even number
     """
 
-    # the following is just for autocompletion
-    if False:
-        from scene.workspace import Workspace
-        from scene.robot import Robot
-        robot = Robot()
-        workspace = Workspace()
-    # comment out above during execution
-
     # object_id = obj.pybullet_id
     pybullet_id = robot.pybullet_id
 
@@ -207,16 +199,6 @@ def geometric_gripper_grasp_pose_generation(
       parallel gripper
     - resolution must be even number
     """
-
-    # the following is just for autocompletion
-    if 0:
-        from perception.object_belief import ObjectBelief
-        from scene.workspace import Workspace
-        from scene.robot import Robot
-        obj = ObjectBelief()
-        robot = Robot()
-        workspace = Workspace()
-    # comment out above during execution
 
     # object_id = obj.obj_id
     pybullet_id = robot.pybullet_id

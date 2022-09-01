@@ -145,6 +145,9 @@ class DepGraph():
             total = 0
             for poseInfo in grasp_poses:
                 for obj_col_id in poseInfo['collisions']:
+                    # ignore hidden object collisions
+                    if obj_col_id not in self.graph.nodes:
+                        continue
                     add2dict(edges_to_add, (obj_local_id, obj_col_id), 1)
                     total += 1
                     # print(obj_local_id, obj_col_id)

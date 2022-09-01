@@ -100,7 +100,7 @@ class PrimitivePlanner():
 
             ## Set Collision Space ##
             self.set_collision_env_with_models()
-
+            input('after setting collision...')
             tpk0 = time.time()
             ## Plan Pick ##
             t0 = time.time()
@@ -413,6 +413,7 @@ class PrimitivePlanner():
                 break
             ## Set Collision Space ##
             self.set_collision_env_with_models()
+            input('after setting collision...')
 
             pick_joint_dict = robot.joint_vals_to_dict(poseInfo['dof_joints'])
             pick_joint_dict_list = self.motion_planner.ee_approach_plan(
@@ -547,16 +548,19 @@ class PrimitivePlanner():
                 self.execution.update_object_state_from_perception(obj)
                 self.execution.detach_obj()
                 self.execution.execute_traj(lift_joint_dict_list2)
+                
+
 
                 return time_info
         return time_info
 
     def attach_known(self, obj, robot, grasp_joint_dict):
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
-        ee_transform_now = robot.get_tip_link_pose(
-            {key: 0.0
-             for key in grasp_joint_dict.keys()}
-        )
+        # ee_transform_now = robot.get_tip_link_pose(
+        #     {key: 0.0
+        #      for key in grasp_joint_dict.keys()}
+        # )
+        ee_transform_now = robot.get_tip_link_pose()
         ee_transform_grasp = robot.get_tip_link_pose(grasp_joint_dict)
         obj_transform = translation_quaternion2homogeneous(
             *p.getBasePositionAndOrientation(obj_local_id, robot.pybullet_id)
@@ -595,6 +599,9 @@ class PrimitivePlanner():
             # print(obs_id)
             # print(self.execution.object_state_msg[str(obs_id)].name)
             obs_msgs.append(self.execution.object_state_msg[str(obs_id)])
+            print('msg for object with id ', obs_id)
+            print(self.execution.object_state_msg[str(obs_id)])
+
         self.motion_planner.set_collision_env_with_models(obs_msgs)
 
     def pipeline_sim(self, visualize=True):

@@ -81,6 +81,8 @@ class DepGraph():
         num_obj_ignore = 2  # 0 (robot), 1 (table)
         for i in range(num_obj_ignore, p.getNumBodies(physicsClientId=self.pybullet_id)):
             obj_i = p.getBodyUniqueId(i, physicsClientId=self.pybullet_id)
+            if obj_i not in self.local2perception:
+                continue
             obj_pi = self.local2perception[obj_i]
             # print(obj_pi)
             if obj_pi != 'H':

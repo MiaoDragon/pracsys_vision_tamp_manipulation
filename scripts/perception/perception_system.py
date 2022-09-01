@@ -204,7 +204,7 @@ class PerceptionSystem():
 
         return net_occluded, new_occlusion_label, occluded_dict
 
-    def pipeline_sim(self, color_img, depth_img, seg_img):
+    def pipeline_sim(self, color_img, depth_img):
         """
         given the camera input, segment the image, and data association
         """
@@ -225,6 +225,33 @@ class PerceptionSystem():
         # self.target_seg_img = target_seg_img
 
         seg_img, obj_models = self.data_assoc.data_association(seg_img, sensed_obj_models, self.objects)
+
+
+        def visualize_assoc(assoc_img):
+            print('segimg: ',assoc_img.shape)
+            seg_rgb_img = np.zeros(list(assoc_img.shape)+[3]).astype(float)        
+            colors = [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,0,1],[0,1,1]]
+            assoc_ids = list(set(assoc_img.reshape(-1).tolist()))
+            print('assoc_ids: ')
+            print(assoc_ids)
+            for i in range(len(assoc_ids)):
+                if assoc_ids[i] == -1:
+                    continue
+                seg_rgb_img[assoc_img==assoc_ids[i]] = colors[assoc_ids[i]]
+            # seg_rgb_img = (seg_rgb_img * 255).astype(int)
+            print('seg_rgb_img shape: ', seg_rgb_img.shape)            
+            seg_rgb_img = cv2.cvtColor(seg_rgb_img.astype('float32'), cv2.COLOR_BGR2RGB)
+            cv2.imshow("segmentation", seg_rgb_img.astype('float32'))
+        
+        visualize_assoc(seg_img)
+
+        cv2.imshow('depth', depth_img)
+
+        cv2.waitKey(0)
+
+        input('after visualizing segmentation...')
+
+
         # obj_models: obj_id -> obj_model
 
         # sensed_obj_ids: currently seen objects in the scene

@@ -18,8 +18,10 @@ class Robot():
         upper_lim,
         joint_range,
         tip_link_name,
+        tip_joint_name,
         ee_params,
-        pybullet_id
+        pybullet_id,
+        active_joint_mask
     ):
         """
         given the URDF file, the pose of the robot base, and the joint angles,
@@ -86,9 +88,15 @@ class Robot():
         self.init_joint_dict = dict(joint_dict)
 
         self.init_joint_vals_np = np.array(list(joint_vals))
-
+        self.active_joint_mask = np.array(active_joint_mask).astype(
+            bool
+        )  
         self.lower_lim = np.array(lower_lim)
         self.upper_lim = np.array(upper_lim)
+
+        self.sample_lower_lim = np.array(lower_lim)[:len(active_joint_mask)]
+        self.sample_upper_lim = np.array(upper_lim)[:len(active_joint_mask)]
+
 
         self.jr = joint_range
 
@@ -147,9 +155,22 @@ class Robot():
         self.attached_obj_id = None
         self.attached_obj_rel_pose = None  # ee T obj
 
-    def set_init_joints(self):
-        self.init_joint_vals = list(self.joint_vals)
-        self.init_joint_dict = dict(self.joint_dict)
+
+
+    def set_init_joints(self, joints=None):
+        if joints is None:
+            self.init_joint_vals = list(self.joint_vals)
+            self.init_joint_dict = dict(self.joint_dict)
+
+        if isinstance(joints, dict):
+            self.init_joint_dict = dict(joints)
+            self.init_joint_vals = self.joint_dict_to_vals(joints)
+            self.init_joint_vals_np = np.array(list(self.init_joint_vals))
+        else:
+            self.init_joint_vals = np.array(joints)
+            self.init_joint_dict = self.joint_vals_to_dict(joints)
+            self.init_joint_vals_np = np.array(joints)
+
 
     def attach(self, obj_id, obj_rel_pose):
         self.attached_obj_id = obj_id
@@ -242,11 +263,25 @@ class Robot():
             else:
                 joints.append(self.joint_vals[i])
 
+
+    def joint_dict_list_to_val_list(self, joint_dict_list):
+        joint_vals = [self.joint_dict_to_vals(joint_dict_list[i]) for i in range(len(joint_dict_list))]
+        return joint_vals
+
     def joint_dict_to_vals(self, joint_dict):
         joint_vals = []
         for i in range(len(self.joint_names)):
-            joint_vals.append(joint_dict[self.joint_names[i]])
+            if self.joint_names[i] in joint_dict:
+                joint_vals.append(joint_dict[self.joint_names[i]])
+            else:
+                joint_vals.append(self.joint_dict[self.joint_names[i]])
         return joint_vals
+
+    # def joint_dict_to_vals(self, joint_dict):
+    #     joint_vals = []
+    #     for i in range(len(self.joint_names)):
+    #         joint_vals.append(joint_dict[self.joint_names[i]])
+    #     return joint_vals
 
     def joint_vals_to_dict(self, joint_vals):
         joint_dict = {}

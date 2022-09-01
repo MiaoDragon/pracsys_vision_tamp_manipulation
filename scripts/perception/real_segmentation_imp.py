@@ -24,37 +24,46 @@ import skg
 import pickle
 from pracsys_vision_tamp_manipulation.srv import SegmentationSrv
 import transformations as tf
+import rospkg
 
 ### This file defines the real camera for the purpose of getting the images of the physical camera
 
 class CylinderSegmentation():
 
-    def __init__(self, camera):
-        self.camera = camera  # camera model
+    def __init__(self):
+        # self.camera = camera  # camera model
         self.bridge = CvBridge()
         self.getDepthIntrinsicInfo()
-        self.plane_threshold = 0.01
-    def getDepthIntrinsicInfo(self):
-        intrinsics = self.camera.info['intrinsics']
-        self.depth_camera_info = dict()
-        self.depth_camera_info['intrinsics'] = dict()
-        self.depth_camera_info['intrinsics']['fx'] = intrinsics[0,0]
-        self.depth_camera_info['intrinsics']['fy'] = intrinsics[1,1]
-        self.depth_camera_info['intrinsics']['ppx'] = intrinsics[0,2]
-        self.depth_camera_info['intrinsics']['ppy'] = intrinsics[1,2]
-        self.depth_camera_info['height'] = self.camera.info['img_shape'][0]
-        self.depth_camera_info['width'] = self.camera.info['img_shape'][1]
+        self.plane_threshold = 0.04
+        self.depth_topic = '/camera/aligned_depth_to_color/image_raw'
+        self.color_topic = '/camera/color/image_raw'
+        self.mode = 'real'  # sim and real uses different settings
+        self.rp = rospkg.RosPack()
+        self.package_path = self.rp.get_path('pracsys_vision_tamp_manipulation')
+        self.plane_fname = os.path.join(self.package_path, 'scripts/plane_models.pkl')
 
-        # depth_camera_info_msg = rospy.wait_for_message('/camera/aligned_depth_to_color/camera_info', CameraInfo)
+
+    def getDepthIntrinsicInfo(self):
+        # intrinsics = self.camera.info['intrinsics']
         # self.depth_camera_info = dict()
         # self.depth_camera_info['intrinsics'] = dict()
-        # self.depth_camera_info['intrinsics']['fx'] = depth_camera_info_msg.K[0]
-        # self.depth_camera_info['intrinsics']['fy'] = depth_camera_info_msg.K[4]
-        # self.depth_camera_info['intrinsics']['ppx'] = depth_camera_info_msg.K[2]
-        # self.depth_camera_info['intrinsics']['ppy'] = depth_camera_info_msg.K[5]
-        # self.depth_camera_info['height'] = depth_camera_info_msg.height        
-        # self.depth_camera_info['width'] = depth_camera_info_msg.width
-        # print(self.depth_camera_info)
+        # self.depth_camera_info['intrinsics']['fx'] = intrinsics[0,0]
+        # self.depth_camera_info['intrinsics']['fy'] = intrinsics[1,1]
+        # self.depth_camera_info['intrinsics']['ppx'] = intrinsics[0,2]
+        # self.depth_camera_info['intrinsics']['ppy'] = intrinsics[1,2]
+        # self.depth_camera_info['height'] = self.camera.info['img_shape'][0]
+        # self.depth_camera_info['width'] = self.camera.info['img_shape'][1]
+
+        depth_camera_info_msg = rospy.wait_for_message('/camera/aligned_depth_to_color/camera_info', CameraInfo)
+        self.depth_camera_info = dict()
+        self.depth_camera_info['intrinsics'] = dict()
+        self.depth_camera_info['intrinsics']['fx'] = depth_camera_info_msg.K[0]
+        self.depth_camera_info['intrinsics']['fy'] = depth_camera_info_msg.K[4]
+        self.depth_camera_info['intrinsics']['ppx'] = depth_camera_info_msg.K[2]
+        self.depth_camera_info['intrinsics']['ppy'] = depth_camera_info_msg.K[5]
+        self.depth_camera_info['height'] = depth_camera_info_msg.height        
+        self.depth_camera_info['width'] = depth_camera_info_msg.width
+        print(self.depth_camera_info)
 
     def convert_depth_to_point_cloud(self, depth_numpy_image):
         """
@@ -83,7 +92,12 @@ class CylinderSegmentation():
         return np.stack([x, y, z], axis = -1)
 
     def convert_depth_color_to_point_cloud(self, depth_numpy_image, color_numpy_image):
-        depth = np.array(depth_numpy_image)# / 1000
+
+        if self.mode == 'real':
+            depth = np.array(depth_numpy_image) / 1000
+        else:
+            depth = np.array(depth_numpy_image)
+
 
         i,j = np.indices(depth_numpy_image.shape)
         x = (j - self.depth_camera_info['intrinsics']['ppx'])/self.depth_camera_info['intrinsics']['fx'] * depth
@@ -161,7 +175,8 @@ class CylinderSegmentation():
 
         # store the plane models
         plane_dict = {"back_plane": back_model, "side_planes": side_models, "bot_plane": bot_plane}
-        f = open('plane_models.pkl', 'wb')
+
+        f = open(self.plane_fname, 'wb')
         pickle.dump(plane_dict, f)
 
     def find_largest_plane(self, point_cloud_input,
@@ -378,8 +393,8 @@ class CylinderSegmentation():
         # color_image_msg = rospy.wait_for_message('/camera/color/image_raw', Image)
         # depth_image_msg = rospy.wait_for_message('/camera/aligned_depth_to_color/image_raw', Image)
 
-        color_image_msg = rospy.wait_for_message('/rgb_image', Image)
-        depth_image_msg = rospy.wait_for_message('/depth_image', Image)
+        color_image_msg = rospy.wait_for_message(self.color_topic, Image)
+        depth_image_msg = rospy.wait_for_message(self.depth_topic, Image)
 
 
 
@@ -413,8 +428,8 @@ class CylinderSegmentation():
         # self.visualize_point_cloud(point_cloud, show_normal=False)
 
         #################### filter out some background noise ####################
-        # point_cloud, pcd_color = self.crop_pcd(point_cloud[:, 2] > 0.9, point_cloud, pcd_color)
-        point_cloud, pcd_color = self.crop_pcd(point_cloud[:, 2] > 0.01, point_cloud, pcd_color)
+        point_cloud, pcd_color = self.crop_pcd(point_cloud[:, 2] > 0.9, point_cloud, pcd_color)
+        # point_cloud, pcd_color = self.crop_pcd(point_cloud[:, 2] > 0.01, point_cloud, pcd_color)
 
         # input("see the point cloud after filtering those within 1.1m")
         # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False)
@@ -437,7 +452,7 @@ class CylinderSegmentation():
         if filter_plane:
             self.filter_plane(point_cloud, pcd_color)
         # use the filtered plane to segment out objects
-        f = open('plane_models.pkl', 'rb')
+        f = open(self.plane_fname, 'rb')
         plane_models = pickle.load(f)
         back_model = plane_models['back_plane']
         side_models = plane_models['side_planes']
@@ -509,3 +524,23 @@ class CylinderSegmentation():
         # * extract the point cloud corresponding to cylinders
         point_cloud, pcd_color = self.crop_pcd(total_mask, point_cloud, pcd_color)
         return cylinder_models
+
+
+
+def main():
+    # self.depth_image_sub = rospy.Subscriber('/camera/aligned_depth_to_color/image_raw', Image, self.depth_image_callback, queue_size = 1)
+    rospy.init_node("real_camera", anonymous=True)
+    segmentation = CylinderSegmentation()
+    rate = rospy.Rate(10) ### 10hz
+    rospy.sleep(1.0)
+    color_image_msg = rospy.wait_for_message('/camera/color/image_raw', Image)
+    depth_image_msg = rospy.wait_for_message('/camera/aligned_depth_to_color/image_raw', Image)
+    # depth_numpy_image = ros_numpy.image.image_to_numpy(depth_image_msg)
+    color_numpy_image = segmentation.bridge.imgmsg_to_cv2(color_image_msg, 'passthrough') / 255
+    depth_numpy_image = segmentation.bridge.imgmsg_to_cv2(depth_image_msg, 'passthrough')
+
+    segmentation.estimate()
+    count = 0
+
+if __name__ == '__main__':
+    main()

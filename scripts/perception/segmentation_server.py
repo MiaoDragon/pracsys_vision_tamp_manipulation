@@ -12,8 +12,8 @@ from scene.camera import Camera
 
 class SegmentationROSServer:
     def __init__(self):
-        camera = Camera()
-        self.seg = CylinderSegmentation(camera)
+        # camera = Camera()
+        self.seg = CylinderSegmentation()
         self.srv = rospy.Service('segmentation',SegmentationSrv, self.segmentation_cb)
 
 

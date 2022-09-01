@@ -52,7 +52,7 @@ class SimScene():
         listener = tf.TransformListener()
 
         rp = rospkg.RosPack()
-        package_path = rp.get_path('pracsys_perception')
+        package_path = rp.get_path('pracsys_vision_tamp_manipulation')
         urdf_path = os.path.join(package_path,scene_dict['robot']['urdf'])
         print(urdf_path)
         joints = [0.] * 16
@@ -72,10 +72,14 @@ class SimScene():
             6.26, 3.80, 5.90, 4.72, 6.26, 3.80, 6.26] + \
             [0.8, 0.8757, 0.8757, 0.81, 0.8757, 0.8757]
 
-        tip_link_name = {'left': 'motoman_left_ee', 'right': 'motoman_right_ee'}
-        tip_joint_name = {'left': 'arm_left_joint_7_t', 'right': 'arm_right_joint_7_t'}
+        # tip_link_name = {'left': 'motoman_left_ee', 'right': 'motoman_right_ee'}
+        tip_link_name = 'motoman_right_ee'
+        # tip_joint_name = {'left': 'arm_left_joint_7_t', 'right': 'arm_right_joint_7_t'}
+        tip_joint_name = 'arm_right_joint_7_t'
+
+
         robot = Robot(urdf_path, scene_dict['robot']['pose']['pos'], scene_dict['robot']['pose']['ori'], 
-                        ll, ul, jr, tip_link_name, tip_joint_name, 0.3015, pid)
+                        ll, ul, jr, tip_link_name, tip_joint_name, 0.3015, pid, [1] + [0] * 7 + [1] * 7)
 
 
         # joints = [0,
@@ -240,7 +244,7 @@ def test():
     import json
     rp = rospkg.RosPack()
     scene_name = "scene2"
-    package_path = rp.get_path('pracsys_ctvmp')
+    package_path = rp.get_path('pracsys_vision_tamp_manipulation')
     scene_f = os.path.join(package_path,'scenes/'+scene_name+'.json')
     f = open(scene_f, 'rb')
     scene_dict = json.load(f)

@@ -7,7 +7,10 @@ from sensor_msgs.msg import Image, JointState
 from shape_msgs.msg import SolidPrimitive, Mesh, MeshTriangle
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from pracsys_vision_tamp_manipulation.msg import RobotState, PercievedObject
-from pracsys_vision_tamp_manipulation.srv import ExecuteTrajectory, AttachObject
+# from pracsys_vision_tamp_manipulation.srv import ExecuteTrajectory, AttachObject
+
+from uniform_object_rearrangement.srv import ExecuteTrajectory, AttachObject, ExecuteTrajectoryRequest, AttachObjectRequest
+
 
 import message_filters
 
@@ -49,8 +52,11 @@ class ExecutionInterface():
 
         # for updating information
         self.current_robot_state = self.scene.robot.joint_dict
-        color_sub = message_filters.Subscriber('rgb_image', Image)
-        depth_sub = message_filters.Subscriber('depth_image', Image)
+
+        self.depth_topic = '/camera/aligned_depth_to_color/image_raw'
+        self.color_topic = '/camera/color/image_raw'
+        color_sub = message_filters.Subscriber(self.color_topic, Image)
+        depth_sub = message_filters.Subscriber(self.depth_topic, Image)
         seg_sub = message_filters.Subscriber('seg_image', Image)
         state_sub = message_filters.Subscriber('robot_state_publisher', RobotState)
         # obj_sub = message_filters.Subscriber('object_state', PercievedObject)
@@ -79,7 +85,37 @@ class ExecutionInterface():
         # ts2.registerCallback(self.update_object_state)
         # state_sub = rospy.Subscriber('robot_state_publisher', RobotState, self.get_robot_state)
 
-    def execute_traj(self, joint_dict_list, ignored_obj_id=-1, duration=0.001):
+
+    def joint_dict_list_to_val_list(self, joint_dict_list):
+        pass
+
+    def execute_traj(self, joint_dict_list):
+        # convert joint_val_list to ROS message
+        arm = 'Right'
+        msg = ExecuteTrajectoryRequest()
+        joint_states = []
+        joint_val_list = self.scene.robot.joint_dict_list_to_val_list(joint_dict_list)
+        # msg.arm_trajectory = JointState()
+        for i in range(len(joint_val_list)):
+            joint_state = JointState()
+            for j in range(len(joint_val_list[i])):
+                joint_state.name.append(self.scene.robot.joint_names[j])
+                joint_state.position.append(joint_val_list[i][j])
+            joint_states.append(joint_state)
+        msg.arm_trajectory.trajectory = joint_states
+        msg.arm_trajectory.armType = arm
+
+        rospy.wait_for_service("execute_trajectory")
+        try:
+            execute_traj_srv = rospy.ServiceProxy('execute_trajectory', ExecuteTrajectory)
+            resp = execute_traj_srv(msg)
+            self.scene.robot.set_joint_from_dict(joint_dict_list[-1])
+        except rospy.ServiceException as e:
+            print("Service call failed: %s"%e)
+
+
+
+    def execute_traj_sim(self, joint_dict_list, ignored_obj_id=-1, duration=0.001):
         """
         call execution_system to execute the trajectory
         if an object has been attached, update the object model transform at the end
@@ -112,7 +148,9 @@ class ExecutionInterface():
             execute_trajectory = rospy.ServiceProxy(
                 'execute_trajectory', ExecuteTrajectory
             )
-            resp1 = execute_trajectory(traj, ignored_obj_id)
+            # resp1 = execute_trajectory(traj, ignored_obj_id)
+            resp1 = execute_trajectory(traj)
+
             self.num_collision += resp1.num_collision
             # print('number of collision: ', self.num_collision)
             # update object pose using the last joint angle if an object is attached
@@ -135,15 +173,21 @@ class ExecutionInterface():
         self.ros_time += time.time() - start_time
         self.execution_calls += 1
 
+
     def attach_obj(self, obj_id):
         """
         call execution_system to attach the object
         """
         start_time = time.time()
         rospy.wait_for_service('attach_object', timeout=10)
+
+        msg = AttachObjectRequest()
+        msg.armType = 'Right'
+        msg.attach = True
+        
         try:
             attach_object = rospy.ServiceProxy('attach_object', AttachObject)
-            resp1 = attach_object(True, obj_id)
+            resp1 = attach_object(msg)
             # ee_pose = self.scene.robot.get_tip_link_pose()
             # obtain object pose in ee link
             # rel_pose = np.linalg.inv(ee_pose).dot(self.perception.objects[obj_id].transform)
@@ -167,9 +211,15 @@ class ExecutionInterface():
         start_time = time.time()
 
         rospy.wait_for_service('attach_object', timeout=10)
+
+        msg = AttachObjectRequest()
+        msg.armType = 'Right'
+        msg.attach = False
+        
+
         try:
             attach_object = rospy.ServiceProxy('attach_object', AttachObject)
-            resp1 = attach_object(False, -1)
+            resp1 = attach_object(msg)
             # self.attached_obj = None
             # self.num_executed_actions += 1
             # self.scene.robot.detach()
@@ -344,6 +394,7 @@ class ExecutionInterface():
         msg = PercievedObject()
         msg.name = str(obj.pybullet_id)
         msg.color = obj.color
+        msg.type = PercievedObject.SOLID_PRIMITIVE
         if obj.obj_shape == 'cylinder':
             msg.solid.type = SolidPrimitive.CYLINDER
             msg.solid.dimensions = [obj.obj_model['height'], obj.obj_model['radius'], 0]
@@ -395,19 +446,19 @@ class ExecutionInterface():
         return oid
 
     def timer_cb(self, timer):
-        color_msg = rospy.wait_for_message('rgb_image', Image, timeout=10)
-        depth_msg = rospy.wait_for_message('depth_image', Image, timeout=10)
+        color_msg = rospy.wait_for_message(self.color_topic, Image, timeout=10)
+        depth_msg = rospy.wait_for_message(self.depth_topic, Image, timeout=10)
         print('obtained color and ddepth')
-        seg_msg = rospy.wait_for_message('seg_image', Image, timeout=10)
+        # seg_msg = rospy.wait_for_message('seg_image', Image, timeout=10)
         print('obtained seg')
-        state_msg = rospy.wait_for_message(
-            'robot_state_publisher', RobotState, timeout=10
-        )
+        # state_msg = rospy.wait_for_message(
+        #     'robot_state_publisher', RobotState, timeout=10
+        # )
         print('obtained state')
 
         self.color_img = self.bridge.imgmsg_to_cv2(color_msg, 'passthrough')
-        self.depth_img = self.bridge.imgmsg_to_cv2(depth_msg, 'passthrough')
-        self.seg_img = self.bridge.imgmsg_to_cv2(seg_msg, 'passthrough')
+        self.depth_img = self.bridge.imgmsg_to_cv2(depth_msg, 'passthrough') / 1000 # /1000 when using real system
+        # self.seg_img = self.bridge.imgmsg_to_cv2(seg_msg, 'passthrough')
         # self.get_robot_state(state_msg)
         print('got robot state')
         attached_obj = self.attached_obj
@@ -416,7 +467,7 @@ class ExecutionInterface():
 
         # perform perception
         print('before pipeline_sim...')
-        self.perception.pipeline_sim(self.color_img, self.depth_img, self.seg_img)
+        self.perception.pipeline_sim(self.color_img, self.depth_img)
         if attached_obj is not None:
             obj = self.perception.objects[self.attached_obj]
             pcd = obj.sample_conservative_pcd() / obj.resol

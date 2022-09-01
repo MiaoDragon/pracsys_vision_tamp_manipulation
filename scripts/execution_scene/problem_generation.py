@@ -163,11 +163,12 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
                 y_scales = np.arange(1.0, 2.0, 0.05) / 10
                 z_scales = np.arange(1.2, 1.8, 0.05) / 10
 
-            # if i == 0:
-            #     color = [1.0, 0., 0., 1]
-            # else:
-            #     color = [*select_color(i), 1]
-            color = [*from_color_map(i, num_objs), 1]
+            if i == 0:
+                color = [1.0, 0., 0., 1]
+            else:
+                # color = [*select_color(i), 1]
+                color = [1., 1., 1., 1]
+            # color = [*from_color_map(i, num_objs), 1]
 
             # scale base object and transform until it satisfies constraints
             while True:
@@ -1226,8 +1227,8 @@ def load_problem_level(
         obj_shape = obj_shapes[i]
         # randomly scale the object
         if i == 0:
-            # color = [1.0,0.,0.,1]
-            color = [1, 1, 1, 1]
+            color = [1.0, 0., 0., 1]
+            # color = [1, 1, 1, 1]
         else:
             color = [1, 1, 1, 1]
         x_size, y_size, z_size = obj_sizes[i]

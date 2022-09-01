@@ -214,7 +214,7 @@ class PerceptionSystem():
         robot_ids = [scene.robot.robot_id]
         # visualzie segmentation image
 
-        seg_img, sensed_obj_models = self.segmentation.segmentation(num_objs=8)
+        seg_img, sensed_obj_models = self.segmentation.segmentation(num_objs=12)
         # sensed_obj_model: seg_id -> obj_model
 
         # self.target_recognition.set_ground_truth_seg_img(seg_img)

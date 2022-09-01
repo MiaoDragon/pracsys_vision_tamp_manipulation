@@ -453,7 +453,13 @@ class MotionPlanner():
             'suction_object',
         )
         # attach the added mesh to robot link
-        touch_links = ['motoman_right_ee', 'arm_right_link_tool0', 'motoman_right_hand']
+        touch_links = [
+            'motoman_right_ee', 'arm_right_link_tool0', 'motoman_right_hand',
+            'robotiq_arg2f_base_link', 'left_outer_knuckle', 'left_outer_finger',
+            'left_inner_finger', 'left_inner_finger_pad', 'left_inner_knuckle',
+            'right_outer_knuckle', 'right_outer_finger', 'right_inner_finger',
+            'right_inner_finger_pad', 'right_inner_knuckle'
+        ]
         aco = self.attach_object(co, robot.tip_link_name, touch_links)
         # self.move_group.attach_object('suction_object', robot.tip_link_name)
         # rospy.sleep(1.0)
@@ -1018,7 +1024,13 @@ class MotionPlanner():
 
     def attach_known(self, obj_name, pose=None, size=(1, 1, 1), timeout=4):
         eef_link = 'motoman_right_ee'
-        touch_links = ['motoman_right_ee', 'arm_right_link_tool0', 'motoman_right_hand']
+        touch_links = [
+            'motoman_right_ee', 'arm_right_link_tool0', 'motoman_right_hand',
+            'robotiq_arg2f_base_link', 'left_outer_knuckle', 'left_outer_finger',
+            'left_inner_finger', 'left_inner_finger_pad', 'left_inner_knuckle',
+            'right_outer_knuckle', 'right_outer_finger', 'right_inner_finger',
+            'right_inner_finger_pad', 'right_inner_knuckle'
+        ]
         self.scene_interface.attach_box(
             eef_link,
             obj_name,

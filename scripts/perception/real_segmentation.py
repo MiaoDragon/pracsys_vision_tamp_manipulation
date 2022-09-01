@@ -95,6 +95,7 @@ class CylinderSegmentation():
                 cylinder_i['axis'] = axis
                 cylinder_i['transform'] = transform
                 cylinder_i['shape'] = 'cylinder'
+                cylinder_i['color'] = resp.cylinders[i].color
                 pts = resp.cylinders[i].pcd.points
                 pcd = []
                 for j in range(len(pts)):

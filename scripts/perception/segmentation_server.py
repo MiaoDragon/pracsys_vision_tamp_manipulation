@@ -43,9 +43,9 @@ class SegmentationROSServer:
             cylinder_i.transform.translation.y = transform[1,3]
             cylinder_i.transform.translation.z = transform[2,3]
             cylinder_i.color = [
-                cylinder_models[i]['color'][0],
-                cylinder_models[i]['color'][1],
-                cylinder_models[i]['color'][2],
+                int(cylinder_models[i]['color'][0]*255),
+                int(cylinder_models[i]['color'][1]*255),
+                int(cylinder_models[i]['color'][2]*255),
             ]
 
             cylinder_i.pcd.points

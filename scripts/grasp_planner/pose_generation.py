@@ -385,6 +385,9 @@ def geometric_gripper_grasp_pose_generation(
         filteredJointPoses,
         key=lambda x: (len(x['collisions']), x['heuristic'])
     )
+
+    print('number of grasp poses: ', len(filteredJointPoses))
+
     return filteredJointPoses
 
 

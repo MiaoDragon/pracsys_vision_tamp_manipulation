@@ -800,6 +800,30 @@ class MotionPlanner():
 
         return voxel_pts_total, voxel_face_total
 
+    def collision_msg_from_perceive_obj(self, perceived_obj_msg: PercievedObject, pose: np.ndarray):
+        # we use pose because during planning the pose can easily cahnge
+
+        co = CollisionObject()
+        co.id = perceived_obj_msg.name
+        co.header.frame_id = 'base'
+        co.operation = co.ADD
+
+        co.primitives = [perceived_obj_msg.solid]
+
+        pose_msg = Pose()
+        pose_msg.position.x = pose[0,3]
+        pose_msg.position.y = pose[1,3]
+        pose_msg.position.z = pose[2,3]
+
+        qw,qx,qy,qz = tf.quaternion_from_matrix(pose)
+        pose_msg.orientation.x = qx
+        pose_msg.orientation.y = qy
+        pose_msg.orientation.z = qz
+        pose_msg.orientation.w = qw
+        co.primitive_poses = [pose_msg]
+        return co
+
+
     def add_mesh_from_vertices_and_faces(self, vertices, faces, transform, name):
         co = CollisionObject()
         co.operation = CollisionObject.ADD
@@ -859,6 +883,32 @@ class MotionPlanner():
         # print(collision_obj)
         self.co_pub.publish(collision_obj)
 
+    def add_cylinder(self, name, pose, height, radius):
+        # print('adding box to the planning scene...')
+        collision_obj = self.obtain_collision_object_cylinder(name, pose, height, radius)
+        # print('message: ')
+        # print(collision_obj)
+        self.co_pub.publish(collision_obj)
+
+
+    def move_collision_object(self, name, pose):
+        co = CollisionObject()
+        co.operation = CollisionObject.MOVE
+        co.id = name
+        quat = tf.quaternion_from_matrix(pose)  # w x y z
+        co.header.frame_id = 'base'
+        co.pose.position.x = pose[0,3]
+        co.pose.position.y = pose[1,3]
+        co.pose.position.z = pose[2,3]
+
+        co.pose.orientation.x = quat[1]
+        co.pose.orientation.y = quat[2]
+        co.pose.orientation.z = quat[3]
+        co.pose.orientation.w = quat[0]
+
+        self.co_pub.publish(co)
+
+
     def obtain_collision_object_box(self, name, pose, size):
         # given pose: specified by a transformation matrix
         co = CollisionObject()
@@ -891,6 +941,46 @@ class MotionPlanner():
         co.primitives = [box]
         co.primitive_poses = [pose_stamped.pose]
         return co
+
+    def obtain_collision_object_cylinder(self, name, pose, height, radius):
+        # given pose: specified by a transformation matrix
+        co = CollisionObject()
+        co.operation = CollisionObject.ADD
+        co.id = name
+        # co.pose.position = [0,0,0]
+        co.pose.position.x = 0
+        co.pose.position.y = 0
+        co.pose.position.z = 0
+        co.pose.orientation.x = 0
+        co.pose.orientation.y = 0
+        co.pose.orientation.z = 0
+        co.pose.orientation.w = 1
+
+        pose_stamped = PoseStamped()
+        pose_stamped.pose.position.x = pose[0,3]
+        pose_stamped.pose.position.y = pose[1,3]
+        pose_stamped.pose.position.z = pose[2,3]
+
+        quat = tf.quaternion_from_matrix(pose)  # w x y z
+        pose_stamped.pose.orientation.x = quat[1]
+        pose_stamped.pose.orientation.y = quat[2]
+        pose_stamped.pose.orientation.z = quat[3]
+        pose_stamped.pose.orientation.w = quat[0]
+        pose_stamped.header.frame_id = 'base'
+        co.header = pose_stamped.header
+        cylinder = SolidPrimitive()
+        cylinder.type = SolidPrimitive.CYLINDER
+        size = [0,0,0]
+        size[cylinder.CYLINDER_HEIGHT] = height
+        size[cylinder.CYLINDER_RADIUS] = radius
+
+        cylinder.dimensions = list(size)
+
+        co.primitives = [cylinder]
+        co.primitive_poses = [pose_stamped.pose]
+        return co
+
+
 
     def obtain_collision_object_mesh(self, model_name, scale, obj_pose):
         return

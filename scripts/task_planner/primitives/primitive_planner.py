@@ -22,7 +22,7 @@ from .rearrangement import Rearrangement
 from . import utils, obj_pose_generation
 from motion_planner.motion_planner import MotionPlanner
 from task_planner.primitives.execution_interface import ExecutionInterface
-
+from perception.object_belief import ObjectBelief
 
 class PrimitivePlanner():
 
@@ -68,7 +68,7 @@ class PrimitivePlanner():
 
     def MoveOrPlaceback(
         self,
-        obj,
+        obj: ObjectBelief,
         pre_grasp_dist=0.02,
         lift_height=0.5,
         pre_place_dist=0.08,
@@ -95,6 +95,12 @@ class PrimitivePlanner():
 
         # planning for each grasp until success
         for poseInfo in filteredPoses:
+            
+            # * reset the grasped object pose at the beginning
+            self.motion_planner.move_collision_object(str(obj.pybullet_id), obj.transform)
+
+
+
             if len(poseInfo['collisions']) != 0:
                 break
 
@@ -144,13 +150,35 @@ class PrimitivePlanner():
 
             ## Plan Intermediate ##
             t0 = time.time()
-            aco = self.attach_known(obj, robot, new_start_joint_dict)
+
+
+            # - clear the collision for the object to attach. In moveit the object id is the perception objectbelief id
+            # TODO: maybe update attach_known and detach_known so that they handle the object?
+            # aco = self.attach_known(obj, robot, new_start_joint_dict)
+            self.motion_planner.scene_interface.remove_world_object(str(obj.pybullet_id))
+            
+            # compute the relative pose of object in robot ee
+
+            # - add the attached object geometry to the planner
+            obj_in_gripper = np.linalg.inv(pick_tip_pose).dot(obj.transform)
+            aco = self.motion_planner.collision_msg_from_perceive_obj(self.execution.object_state_msg[str(obj.pybullet_id)], 
+                                                                      obj.transform)
+
             inter_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
                 lift_joint_dict_list[-1],
                 self.intermediate_joint_dict,
                 attached_acos=[aco],
             )
-            self.detach_known(obj)
+
+            # # - add the object back
+            # new_tip_pose = self.scene.robot.get_tip_link_pose(inter_joint_dict_list[-1])
+            # obj_pose = new_tip_pose.dot(obj_in_gripper)
+            # self.motion_planner.add_cylinder(str(obj.pybullet_id), obj_pose, obj.obj_model['height'], obj.obj_model['radius'])
+
+            # self.detach_known(obj)
+
+
+
             t1 = time.time()
             add2dict(time_info, 'inter_plan', [t1 - t0])
             print("Intermediate Plan Time: ", time_info['inter_plan'][-1])
@@ -237,6 +265,11 @@ class PrimitivePlanner():
             obj2gripper = np.linalg.inv(obj_rel_transform)
             shuffle(placements)
             for sample_pos in placements:
+
+                # # reset the object pose at the beginning
+                # self.motion_planner.move_collision_object(str(obj.pybullet_id), obj.transform)
+
+
                 tpl0 = time.time()
 
                 # get gripper transform at placement
@@ -293,7 +326,17 @@ class PrimitivePlanner():
                 ## Plan Place ##
                 t0 = time.time()
                 place_joint_dict = robot.joint_vals_to_dict(jointPoses)
-                aco = self.attach_known(obj, robot, grasp_joint_dict)
+
+                # TODO: reset object pose in the while loop before planning
+                self.motion_planner.scene_interface.remove_world_object(str(obj.pybullet_id))
+                # compute the relative pose of object in robot ee
+
+                # - add the attached object geometry to the planner
+                new_robot_pose = self.scene.robot.get_tip_link_pose(new_start_joint_dict)
+                aco = self.motion_planner.collision_msg_from_perceive_obj(self.execution.object_state_msg[str(obj.pybullet_id)], 
+                                                                        new_robot_pose.dot(obj_in_gripper))
+
+                # aco = self.attach_known(obj, robot, grasp_joint_dict)
                 place_joint_dict_list = self.motion_planner.ee_approach_plan(
                     new_start_joint_dict,
                     place_joint_dict,
@@ -302,7 +345,15 @@ class PrimitivePlanner():
                     is_pre_dir_abs=True,
                     attached_acos=[aco],
                 )
-                self.detach_known(obj)
+
+                # add object back
+                new_robot_pose = self.scene.robot.get_tip_link_pose(place_joint_dict_list[-1])
+                
+                self.motion_planner.add_cylinder(str(obj.pybullet_id), new_robot_pose.dot(obj_in_gripper), 
+                                                obj.obj_model['height'], obj.obj_model['radius'])                
+                # self.detach_known(obj)
+
+
                 t1 = time.time()
                 add2dict(time_info, 'place_plan', [t1 - t0])
                 print("Place Plan Time: ", time_info['place_plan'][-1])
@@ -391,6 +442,7 @@ class PrimitivePlanner():
                 obj_local_id,
                 robot,
                 self.scene.workspace,
+                offset1=(0, 0, 0.02), # padding for grasping pose
                 offset2=(0, 0, -pre_grasp_dist),
             )
         t1 = time.time()
@@ -413,7 +465,6 @@ class PrimitivePlanner():
                 break
             ## Set Collision Space ##
             self.set_collision_env_with_models()
-            input('after setting collision...')
 
             pick_joint_dict = robot.joint_vals_to_dict(poseInfo['dof_joints'])
             pick_joint_dict_list = self.motion_planner.ee_approach_plan(
@@ -457,6 +508,11 @@ class PrimitivePlanner():
             obj2gripper = np.linalg.inv(obj_rel_transform)
             shuffle(placements)
             for sample_pos in placements:
+            
+                # * reset the grasped object pose at the beginning
+                self.motion_planner.move_collision_object(str(obj.pybullet_id), obj.transform)
+
+                print('trying sample...')
                 tpl0 = time.time()
 
                 # get gripper transform at placement
@@ -502,7 +558,18 @@ class PrimitivePlanner():
 
                 ## Plan Place ##
                 place_joint_dict = robot.joint_vals_to_dict(jointPoses)
-                aco = self.attach_known(obj, robot, grasp_joint_dict)
+
+
+                self.motion_planner.scene_interface.remove_world_object(str(obj.pybullet_id))
+                
+                # compute the relative pose of object in robot ee
+
+                # - add the attached object geometry to the planner
+                obj_in_gripper = np.linalg.inv(pick_tip_pose).dot(obj.transform)
+                aco = self.motion_planner.collision_msg_from_perceive_obj(self.execution.object_state_msg[str(obj.pybullet_id)], 
+                                                                        obj.transform)
+
+                # aco = self.attach_known(obj, robot, grasp_joint_dict)
                 place_joint_dict_list = self.motion_planner.ee_approach_plan(
                     new_start_joint_dict,
                     place_joint_dict,
@@ -511,7 +578,16 @@ class PrimitivePlanner():
                     is_pre_dir_abs=True,
                     attached_acos=[aco],
                 )
-                self.detach_known(obj)
+
+                new_tip_pose = self.scene.robot.get_tip_link_pose(place_joint_dict_list[-1])
+                obj_pose = new_tip_pose.dot(obj_in_gripper)
+                self.motion_planner.add_cylinder(str(obj.pybullet_id), obj_pose, obj.obj_model['height'], obj.obj_model['radius'])
+
+                # self.detach_known(obj)
+
+
+                input('after place_joint_dict_list...')
+
                 if not place_joint_dict_list:
 
                     continue

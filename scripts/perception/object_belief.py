@@ -9,8 +9,10 @@ import sys
 sys.path.insert(0,'/home/yinglong/Documents/research/task_motion_planning/infrastructure/motoman_ws/src/pracsys_vision_tamp_manipulation/scripts')
 
 import numpy as np
+from utils.transform_utils import *
 from utils.visual_utils import *
 import open3d as o3d
+import trimesh
 
 DEBUG = False
 
@@ -35,7 +37,7 @@ class ObjectBelief():
         size_x = int(np.ceil((xmax - xmin) / resol[0]))
         size_y = int(np.ceil((ymax - ymin) / resol[1]))
         size_z = int(np.ceil((zmax - zmin) / resol[2]))
-        
+
         self.xmax = xmin + size_x * resol[0]
         self.ymax = ymin + size_y * resol[1]
         self.zmax = zmin + size_z * resol[2]
@@ -47,7 +49,7 @@ class ObjectBelief():
         self.size_x = size_x
         self.size_y = size_y
         self.size_z = size_z
-        
+
         self.tsdf_default = 0#-np.inf
         self.tsdf = np.zeros((size_x,size_y,size_z)) + self.tsdf_default  # default value: -1
         self.tsdf_count = np.zeros((size_x,size_y,size_z)).astype(int)  # count how many times it's observed
@@ -82,18 +84,35 @@ class ObjectBelief():
         self.world_in_voxel_tran = self.world_in_voxel[:3,3]
 
         self.obj_hide_set = set()  # list of objects that are hiding this object
-        self.obj_id = obj_id 
+        self.obj_id = obj_id
         self.pybullet_id = pybullet_id
         self.depth_img = None
+
+        # perfect perceptions stuff:
+        self.transform = translation_quaternion2homogeneous(
+            *p.getBasePositionAndOrientation(pybullet_id)
+        )
+        shape = p.getCollisionShapeData(pybullet_id, -1)[0]
+        if shape[2] == p.GEOM_BOX:
+            size_x = shape[3][0]
+            size_y = shape[3][1]
+            size_z = shape[3][2]
+        elif shape[2] in (p.GEOM_CYLINDER, p.GEOM_CAPSULE):
+            size_x = 2 * shape[3][1]
+            size_y = 2 * shape[3][1]
+            size_z = shape[3][0]
+        transform = np.eye(4)
+        transform[:3, :3] = self.transform[:3, :3]
+        self.pcd = trimesh.sample.volume_rectangular((size_x, size_y, size_z), 2500, transform)
 
     def update_obj_hide_set(self, obj_hide_set):
         # given the observed obj_hide_set, update it
         self.obj_hide_set = self.obj_hide_set.union(set(obj_hide_set))
 
     def get_optimistic_model(self):
-        
+
         return (self.tsdf_count >= self.threshold) & (self.tsdf < self.max_v) & (self.tsdf > self.min_v)
-    
+
     def get_conservative_model(self):
         # unseen parts below to the conservative model
         return (self.tsdf_count < self.threshold) | ((self.tsdf_count >= self.threshold) & (self.tsdf < self.max_v))
@@ -104,7 +123,7 @@ class ObjectBelief():
 
     def set_sensed(self):
         self.sensed = 1
-    
+
     def update_transform(self, transform):
         self.transform = transform
         self.world_in_voxel = np.linalg.inv(self.transform)
@@ -172,11 +191,11 @@ class ObjectBelief():
         if (self.xmin == new_xmin) and (self.ymin == new_ymin) and (self.zmin == new_zmin) and \
             (self.xmax == new_xmax) and (self.ymax == new_ymax) and (self.zmax == new_zmax):
             return
-        
+
 
         new_tsdf = np.zeros((new_size_x, new_size_y, new_size_z)) + self.tsdf_default
         new_tsdf_count = np.zeros((new_size_x, new_size_y, new_size_z)).astype(int)
-            
+
         new_tsdf[nx:nx+self.size_x,ny:ny+self.size_y,nz:nz+self.size_z] = self.tsdf
         new_tsdf_count[nx:nx+self.size_x,ny:ny+self.size_y,nz:nz+self.size_z] = self.tsdf_count
 
@@ -193,7 +212,7 @@ class ObjectBelief():
 
         self.ymax = new_ymax
         self.zmax = new_zmax
-        
+
         self.size_x = new_size_x
         self.size_y = new_size_y
         self.size_z = new_size_z
@@ -202,12 +221,12 @@ class ObjectBelief():
         self.origin_y = new_ymin
         self.origin_z = new_zmin
         self.transform[:3,3] = np.array([self.origin_x, self.origin_y, self.origin_z])
-        
+
         self.tsdf = new_tsdf
         self.tsdf_count = new_tsdf_count
         self.voxel_x, self.voxel_y, self.voxel_z = np.indices(self.tsdf.shape).astype(float)
 
-    
+
     def update_tsdf(self, depth_img, color_img, camera_extrinsics, camera_intrinsics, visualize=False):
         """
         given the *segmented* depth image belonging to the object, update tsdf
@@ -306,7 +325,7 @@ class ObjectBelief():
 
         # self.tsdf[self.tsdf>self.max_v*1.1] = self.max_v*1.1
         # self.tsdf[self.tsdf<self.min_v] = self.min_v
-        
+
         # * truncate
         update_tsdf[update_tsdf>self.max_v*1.1] = self.max_v*1.1
         update_tsdf[update_tsdf<self.min_v] = self.min_v
@@ -330,6 +349,7 @@ class ObjectBelief():
         del update_tsdf_count
 
     def sample_pcd(self, mask, n_sample=10):
+        return np.array(self.pcd)
         # sample voxels in te mask
         # obtain sample in one voxel cell
         grid_sample = np.random.uniform(low=[0,0,0], high=[1,1,1], size=(n_sample, 3))
@@ -372,7 +392,7 @@ class ObjectBelief():
 
         vert_mask_after_valid = np.zeros(self.voxel_x.shape).astype(bool)
         vert_mask_after_valid[verts_ind[:, 0], verts_ind[:, 1], verts_ind[:, 2]] = 1
-        
+
         pcd = self.sample_pcd(vert_mask_after_valid) / self.resol
         # voxel1 = visualize_voxel(self.voxel_x, self.voxel_y, self.voxel_z, vert_mask, [0,0,1])
         # voxel2 = visualize_voxel(self.voxel_x, self.voxel_y, self.voxel_z, vert_mask_after_valid, [1,0,0])
@@ -409,7 +429,7 @@ class ObjectBelief():
         transform[:3,:3] = np.eye(3)
         transform[:2,3] = -midpoint[:2]
         return transform
-    
+
     def get_net_transform_from_center_frame(self, pcd, transform):
         """
         given transform from center to world, get the net transform
@@ -444,7 +464,7 @@ class ObjectBelief():
         filtered_pts = filtered_pts + filtered_g * 0.5
         # use the TSDF value to shift the suction points. If TSDF > 0, we need to move inside, otherwise outside
         filtered_pts = filtered_pts - filtered_g * self.tsdf[filter].reshape((-1,1))
-        
+
 
         if DEBUG:
             pcd_v = visualize_pcd(self.sample_pcd(filter)/self.resol, [0,0,0])
@@ -458,7 +478,7 @@ class ObjectBelief():
                 # draw arrows indicating the normal
                 if (np.linalg.norm(filtered_g[i]) <= 1e-5):
                     continue
-            
+
 
                 arrow = o3d.geometry.TriangleMesh.create_arrow(cylinder_radius=1/10, cone_radius=1.5/10, cylinder_height=5/10, cone_height=4/10)
                 translation = filtered_pts[i]
@@ -471,7 +491,7 @@ class ObjectBelief():
                 transform[:3,3] = translation
                 arrow.transform(transform)
                 arrows.append(arrow)
-            o3d.visualization.draw_geometries(arrows+[pcd_v])    
+            o3d.visualization.draw_geometries(arrows+[pcd_v])
 
 
         # take only the ones that are on seen TSDFs
@@ -513,7 +533,7 @@ class ObjectBelief():
         valid_1 = (img_i-1>=0) & (seg_img==self.obj_id)
         unhidden_valid_filtered = np.zeros(boundary_mp[valid_1].shape).astype(bool)
         valid_filtered = np.zeros(boundary_mp[valid_1].shape).astype(bool)
-        # the neighbor object should be 
+        # the neighbor object should be
         # 1. an object that is not the current object
         # 2. workspace (considered as valid boundary)
         filter1 = obj_seg_filter[img_i[valid_1]-1,img_j[valid_1]]  # this has excluded workspace
@@ -534,13 +554,13 @@ class ObjectBelief():
         valid_filtered[filter3] = 1
         unhidden_boundary_mp[valid_1] |= unhidden_valid_filtered
         boundary_mp[valid_1] |= valid_filtered
-        
+
 
         valid_1 = (img_i+1<seg_img.shape[0]) & (seg_img==self.obj_id)
         unhidden_valid_filtered = np.zeros(boundary_mp[valid_1].shape).astype(bool)
         valid_filtered = np.zeros(boundary_mp[valid_1].shape).astype(bool)
 
-        # the neighbor object should be 
+        # the neighbor object should be
         # 1. an object that is not the current object
         # 2. workspace (considered as valid boundary)
         filter1 = obj_seg_filter[img_i[valid_1]+1,img_j[valid_1]]  # this has excluded workspace
@@ -568,7 +588,7 @@ class ObjectBelief():
         unhidden_valid_filtered = np.zeros(boundary_mp[valid_1].shape).astype(bool)
         valid_filtered = np.zeros(boundary_mp[valid_1].shape).astype(bool)
 
-        # the neighbor object should be 
+        # the neighbor object should be
         # 1. an object that is not the current object
         # 2. workspace (considered as valid boundary)
         filter1 = obj_seg_filter[img_i[valid_1],img_j[valid_1]-1]  # this has excluded workspace
@@ -595,7 +615,7 @@ class ObjectBelief():
         valid_1 = (img_j+1<seg_img.shape[1]) & (seg_img==self.obj_id)
         unhidden_valid_filtered = np.zeros(boundary_mp[valid_1].shape).astype(bool)
         valid_filtered = np.zeros(boundary_mp[valid_1].shape).astype(bool)
-        # the neighbor object should be 
+        # the neighbor object should be
         # 1. an object that is not the current object
         # 2. workspace (considered as valid boundary)
         filter1 = obj_seg_filter[img_i[valid_1],img_j[valid_1]+1]  # this has excluded workspace
@@ -620,7 +640,7 @@ class ObjectBelief():
 
         return boundary_mp, unhidden_boundary_mp
 
-            
+
     def update_depth_belief(self, depth_img, seg_img, workspace_ids):
         """
         implement the object revealing process based on the segmentation and depth images
@@ -645,7 +665,7 @@ class ObjectBelief():
             self.seg_boundary = boundary_mp
             boundary_mp, unhidden_boundary_mp = self.obtain_boundary(depth_img, seg_img, workspace_ids)
             self.seg_unhidden_boundary = self.seg_unhidden_boundary | unhidden_boundary_mp
-            
+
         else:
             # union mask
             mask = (self.seg_img == self.obj_id) | (seg_img == self.obj_id)
@@ -707,7 +727,7 @@ class ObjectBelief():
                 valid_mask = valid_mask & (voxel_z>0)
             elif zi == 2:
                 valid_mask = valid_mask & (voxel_z<voxel_z.max())
-            
+
             if xi == 1:
                 x = voxel_x[valid_mask]-1
             elif xi == 2:
@@ -756,7 +776,7 @@ def test():
     object = ObjectBelief(0,0, 0.0, 0.0, 0.0, 1.000, 1.000, 1.000, [0.1,0.1,1.0], 0.05)
     object.set_active()
     # object.tsdf = object.tsdf + 1.0
-    
+
     # object.expand_model(-0.005, -0.005, -0.005, 1.01,1.01,1.01)
 
     # print('new mins: ')

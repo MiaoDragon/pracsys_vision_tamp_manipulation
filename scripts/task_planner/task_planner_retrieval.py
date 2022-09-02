@@ -99,29 +99,21 @@ class TaskPlanner():
         self.execution_calls = 0
         self.rearrange_calls = 0
 
-        self.pipeline_sim()
         self.num_executed_actions = 0
         self.num_collision = 0
 
+        self.pipeline_sim()
+        self.dep_graph.first_run()
+        self.execution.target_obj_id = self.dep_graph.target_id
+        self.dep_graph.draw_graph(True)
+        self.dep_graph.draw_graph()
+
     def pipeline_sim(self):
-        # self.planner.pipeline_sim()
         print("** Perception Started... **")
-        self.perception.pipeline_sim(
-            self.execution.color_img,
-            self.execution.depth_img,
-            self.execution.seg_img,
-            self.execution.scene.camera,
-            [self.execution.scene.robot.robot_id],
-            self.execution.scene.workspace.component_ids,
-        )
+        self.planner.pipeline_sim()
         print("** Perception Done! **")
 
     def run_pipeline(self, ):
-        self.dep_graph.first_run()
-        self.execution.target_obj_id = self.dep_graph.target_id
-        # self.dep_graph.draw_graph()
-        self.dep_graph.draw_graph(True)
-
         ### Grasp Sampling Test ###
         print("* Grasp Test *")
         pose_ind = 'q'  # input("Please Enter Object Id: ")
@@ -137,7 +129,6 @@ class TaskPlanner():
             pose_ind = input("Please Enter Object Id: ")
         ### Grasp Sampling Test End ###
 
-        self.dep_graph.draw_graph()
         ### Pick & Place Test ###
         print("* Pick & Place Test *")
         pose_ind = 'start'
@@ -151,27 +142,66 @@ class TaskPlanner():
 
             func_choice = input("t -> TryMoveOneObject, m -> MoveOrPlaceback: ")
             if func_choice == 't':
-                time_info = self.planner.TryMoveOneObject(obj)
+                success, time_info = self.planner.TryMoveOneObject(obj)
             else:
-                time_info = self.planner.MoveOrPlaceback(obj)
+                success, time_info = self.planner.MoveOrPlaceback(obj)
             print("\n\nDone:")
             for tt, tm in time_info.items():
                 if type(tm) == list:
                     print(f'{tt}: avg={np.average(tm)} std={np.std(tm)} num={len(tm)}')
                 else:
                     print(f'{tt}: {tm}')
-            plan_reset = self.planner.motion_planner.joint_dict_motion_plan(
-                self.execution.scene.robot.joint_dict,
-                self.execution.scene.robot.init_joint_dict
-            )
-            if len(plan_reset) == 0:
-                continue
-            self.execution.execute_traj(plan_reset)
-            if func_choice == 't':
-                self.pipeline_sim()
             self.dep_graph.rerun()
             self.dep_graph.draw_graph()
         ### Pick Test End ###
+
+    def alg_pipeline(self):
+        TryMoveOne = self.planner.TryMoveOne
+        MoveOrPlaceback = self.planner.MoveOrPlaceback
+        Retrieve = self.planner.pick
+
+        time_infos = []
+
+        failure = False
+        while failure == False:
+            sinks, probs = self.dep_graph.sinks()
+            target = self.dep_graph.target_pid
+            print("target?", target, sinks, probs)
+            if target in sinks:
+                break
+            success, info = TryMoveOne(sinks, probs)
+            time_infos += info
+            if not success:
+                failure = True
+                for sink in sinks:
+                    obj = self.perception.objects[sink]
+                    success, info = MoveOrPlaceback(obj)
+                    time_infos.append(info)
+                    if not success:
+                        continue
+                    success, info = TryMoveOne(sinks, probs)
+                    time_infos += info
+                    if not success:
+                        continue
+                    failure = False
+                    break
+            self.dep_graph.rerun()
+            self.dep_graph.draw_graph()
+
+        if failure:
+            return False
+        else:
+            obj = self.perception.objects[target]
+            Retrieve(obj)
+            return True
+
+    def reset(self):
+        plan_reset = self.planner.motion_planner.joint_dict_motion_plan(
+            self.execution.scene.robot.joint_dict,
+            self.execution.scene.robot.init_joint_dict
+        )
+        if len(plan_reset) > 0:
+            self.execution.execute_traj(plan_reset)
 
 
 def main():
@@ -185,6 +215,7 @@ def main():
     # input('ENTER to start planning...')
     print('pid: ', task_planner.scene.pid)
     task_planner.run_pipeline()
+    task_planner.alg_pipeline()
 
 
 if __name__ == "__main__":

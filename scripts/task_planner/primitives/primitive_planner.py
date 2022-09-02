@@ -12,6 +12,7 @@ import time
 from random import shuffle
 
 import cv2
+import rospy
 import std_msgs
 import numpy as np
 import pybullet as p
@@ -63,6 +64,16 @@ class PrimitivePlanner():
             )
         )
 
+    def TryMoveOne(self, sinks, probs, pre_grasp_dist=0.02, pre_place_dist=0.08):
+        time_infos = []
+        for obj_id in np.random.choice(sinks, len(sinks), replace=False, p=probs):
+            obj = self.perception.objects[obj_id]
+            success, info = self.TryMoveOneObject(obj, pre_grasp_dist, pre_place_dist)
+            time_infos.append(info)
+            if success:
+                return True, time_infos
+        return False, time_infos
+
     def MoveOrPlaceback(
         self,
         obj,
@@ -72,7 +83,7 @@ class PrimitivePlanner():
     ):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
-        time_info = {"success": False}
+        time_info = {"success": False, "action": "MoveOrPlaceback"}
         total0 = time.time()
 
         ## Generate Grasps ##
@@ -96,7 +107,7 @@ class PrimitivePlanner():
                 break
 
             ## Set Collision Space ##
-            self.set_collision_env_with_models()
+            self.set_collision_env_with_models(obj.obj_id)
 
             tpk0 = time.time()
             ## Plan Pick ##
@@ -171,17 +182,10 @@ class PrimitivePlanner():
             ## Update Perception ##
             print("** Perception Started... **")
             t0 = time.time()
-            self.perception.pipeline_sim(
-                self.execution.color_img,
-                self.execution.depth_img,
-                self.execution.seg_img,
-                self.execution.scene.camera,
-                [self.execution.scene.robot.robot_id],
-                self.execution.scene.workspace.component_ids,
-            )
+            self.pipeline_sim()
             t1 = time.time()
-            time_info['perception'] = t1 - t0
-            print("** Perception Done! (", time_info['perception'], ") **")
+            add2dict(time_info, 'perception', [t1 - t0])
+            print("** Perception Done! (", time_info['perception'][-1], ") **")
 
             ## Generate Placements ##
             t0 = time.time()
@@ -191,7 +195,7 @@ class PrimitivePlanner():
                 self.execution,
                 self.perception,
                 self.scene.workspace,
-                display=True,
+                # display=True,
             )
             t1 = time.time()
             time_info['placements_gen'] = t1 - t0
@@ -334,10 +338,11 @@ class PrimitivePlanner():
                 t1 = time.time()
                 time_info['execute_place'] = t1 - t0
                 print("Execute time: ", time_info['execute_place'])
+                time_info["success"] = True
                 total1 = time.time()
                 time_info['total'] = total1 - total0
                 print("Total time: ", time_info['total'])
-                return time_info
+                return True, time_info
 
             ## Execute Reverse Pick ##
             print(f"Failed to plan place for {obj.obj_id}! Putting it back...")
@@ -349,20 +354,21 @@ class PrimitivePlanner():
             t1 = time.time()
             time_info['execute_place'] = t1 - t0
             print("Execute time: ", time_info['execute_place'])
+            time_info["success"] = True
             total1 = time.time()
             time_info['total'] = total1 - total0
             print("Total time: ", time_info['total'])
-            return time_info
+            return True, time_info
 
         total1 = time.time()
         time_info['total'] = total1 - total0
         print("Total time: ", time_info['total'])
-        return time_info
+        return False, time_info
 
     def TryMoveOneObject(self, obj, pre_grasp_dist=0.02, pre_place_dist=0.08):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
-        time_info = {"success": False}
+        time_info = {"success": False, "action": "TryMoveOneObject"}
         total0 = time.time()
 
         ## Generate Grasps ##
@@ -400,7 +406,7 @@ class PrimitivePlanner():
                 break
 
             ## Set Collision Space ##
-            self.set_collision_env_with_models()
+            self.set_collision_env_with_models(obj.obj_id)
 
             tpk0 = time.time()
             ## Plan Pick ##
@@ -443,11 +449,29 @@ class PrimitivePlanner():
             add2dict(time_info, 'total_pick', tpk1 - tpk0)
             print("Total Place Time: ", time_info['total_pick'])
 
+            if self.dep_graph and self.dep_graph.target_id and self.dep_graph.target_id in self.dep_graph.graph:
+                print("** Target Seen, Skipping Intermediate **")
+                new_start_joint_dict = lift_joint_dict_list[-1]
+            else:
+                ## Plan Intermediate ##
+                t0 = time.time()
+                aco = self.attach_known(obj, robot, new_start_joint_dict)
+                inter_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
+                    lift_joint_dict_list[-1],
+                    self.intermediate_joint_dict,
+                    attached_acos=[aco],
+                )
+                self.detach_known(obj)
+                t1 = time.time()
+                add2dict(time_info, 'inter_plan', [t1 - t0])
+                print("Intermediate Plan Time: ", time_info['inter_plan'][-1])
+                if not inter_joint_dict_list:
+                    tpk1 = time.time()
+                    add2dict(time_info, 'total_pick', tpk1 - tpk0)
+                    continue
+                new_start_joint_dict = inter_joint_dict_list[-1]
             ## Place ##
-            new_start_joint_dict, grasp_joint_dict = (
-                lift_joint_dict_list[-1],
-                pick_joint_dict_list[-1],
-            )
+            grasp_joint_dict = pick_joint_dict_list[-1]
             ## random version ##
             # max_iters = 100
             # count = 0
@@ -578,6 +602,20 @@ class PrimitivePlanner():
                 self.execution.execute_traj(pick_joint_dict_list)
                 self.execution.attach_obj(obj.obj_id)
                 self.execution.execute_traj(lift_joint_dict_list)
+
+                ## Update Perception ##
+                if self.dep_graph and self.dep_graph.target_id and self.dep_graph.target_id in self.dep_graph.graph:
+                    print("** Target Seen, Skipping Perception **")
+                else:
+                    self.execution.execute_traj(inter_joint_dict_list)
+                    rospy.sleep(0.001)
+                    print("** Perception Started... **")
+                    t0 = time.time()
+                    self.pipeline_sim()
+                    t1 = time.time()
+                    add2dict(time_info, 'perception', [t1 - t0])
+                    print("** Perception Done! (", time_info['perception'][-1], ") **")
+
                 self.execution.execute_traj(place_joint_dict_list)
                 self.execution.detach_obj()
                 self.execution.execute_traj(lift_joint_dict_list2)
@@ -588,12 +626,12 @@ class PrimitivePlanner():
                 total1 = time.time()
                 time_info['total'] = total1 - total0
                 print("Total time: ", time_info['total'])
-                return time_info
+                return True, time_info
 
         total1 = time.time()
         time_info['total'] = total1 - total0
         print("Total time: ", time_info['total'])
-        return time_info
+        return False, time_info
 
     def grasp_test(self, obj):
         # robot = self.scene.robot
@@ -644,7 +682,7 @@ class PrimitivePlanner():
         ]
 
         ## Set Collision Space ##
-        self.set_collision_env_with_models()
+        self.set_collision_env_with_models(obj.obj_id)
 
         # pick poses
         for poseInfo in filteredPoses:
@@ -740,7 +778,7 @@ class PrimitivePlanner():
         self.motion_planner.detach_known(str(obj.pybullet_id))
         # self.motion_planner.scene_interface.remove_world_object("TEMP_ATTACHED")
 
-    def set_collision_env_with_models(self):
+    def set_collision_env_with_models(self, obj_id):
         ## Set Collision Space ##
         obs_msgs = []
         # for obs_id in self.execution.object_state_msg.keys():
@@ -750,13 +788,22 @@ class PrimitivePlanner():
             # print(self.execution.object_state_msg[str(obs_id)].name)
             obs_msgs.append(self.execution.object_state_msg[str(obs_id)])
         self.motion_planner.set_collision_env_with_models(obs_msgs)
+        self.motion_planner.clear_octomap()
+        print("keys:", list(self.perception.filtered_occluded_dict.keys()))
+        print("keys2:", list(self.perception.objects.keys()))
+        self.set_collision_env(
+            list(self.perception.filtered_occluded_dict.keys()),
+            [],
+            list(self.perception.filtered_occluded_dict.keys()),
+            padding=4,
+        )
 
     def place(self, obj, start_joint_dict, grasp_joint_dict, pre_place_dist=0.08):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
 
         ## Set Collision Space ##
-        self.set_collision_env_with_models()
+        self.set_collision_env_with_models(obj.obj_id)
 
         # print("Equal?", self.perception == self.execution.perception)
         t0 = time.time()
@@ -1697,31 +1744,28 @@ class PrimitivePlanner():
 
         return success
 
-    def pipeline_sim(self):
-        # sense & perceive
-        # wait for image to update
-        v_pcds = []
-        for obj_id, obj in self.perception.objects.items():
-            v_pcd = obj.sample_conservative_pcd()
-            v_pcd = obj.transform[:3, :3].dot(v_pcd.T).T + obj.transform[:3, 3]
-            # v_pcd = occlusion.world_in_voxel_rot.dot(v_pcd.T).T + occlusion.world_in_voxel_tran
-            # v_pcd = v_pcd / occlusion.resol
-            v_color = np.zeros(v_pcd.shape)
-            v_color[:, 0] = 1
-            v_color[:, 1] = 0
-            v_color[:, 2] = 0
-            v_pcds.append(visualize_pcd(v_pcd, v_color))
-        o3d.visualization.draw_geometries(v_pcds)
-        # input('press to start...')
-
-        # pass  # do continuously in execution_interface
-        # color_img, depth_img, seg_img = self.execution.get_image()
-        # start_time = time.time()
-        # self.perception.pipeline_sim(color_img, depth_img, seg_img, self.scene.camera,
-        #                             [self.scene.robot.robot_id], self.scene.workspace.component_ids)
-
-        # self.perception_time += time.time() - start_time
-        # self.perception_calls += 1
+    def pipeline_sim(self, visualize=False):
+        self.perception.pipeline_sim(
+            self.execution.color_img,
+            self.execution.depth_img,
+            self.execution.seg_img,
+            self.execution.scene.camera,
+            [self.execution.scene.robot.robot_id],
+            self.execution.scene.workspace.component_ids,
+        )
+        if visualize:
+            v_pcds = []
+            for obj_id, obj in self.perception.objects.items():
+                v_pcd = obj.sample_conservative_pcd()
+                v_pcd = obj.transform[:3, :3].dot(v_pcd.T).T + obj.transform[:3, 3]
+                # v_pcd = occlusion.world_in_voxel_rot.dot(v_pcd.T).T + occlusion.world_in_voxel_tran
+                # v_pcd = v_pcd / occlusion.resol
+                v_color = np.zeros(v_pcd.shape)
+                v_color[:, 0] = 1
+                v_color[:, 1] = 0
+                v_color[:, 2] = 0
+                v_pcds.append(visualize_pcd(v_pcd, v_color))
+            o3d.visualization.draw_geometries(v_pcds)
 
     def move_and_sense_precheck(self, move_obj_idx, moved_objects):
         start_time = time.time()

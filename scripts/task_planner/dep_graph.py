@@ -35,6 +35,7 @@ class DepGraph():
         self.perception = perception
         self.pybullet_id = self.execution.scene.robot.pybullet_id
         self.target_id = None
+        self.target_pid = -1
         self.temp_target_id = None
         self.gt_graph = None
         self.graph = None
@@ -63,8 +64,18 @@ class DepGraph():
             )
         )
         candidates = candidates if candidates else list(self.gt_graph.nodes(data="dname"))
-        self.target_id, self.target_dname = choice(candidates)
-        self.gt_graph.nodes[self.target_id]['dname'] = 'T.' + self.target_dname
+        # sort by number of depdendencies
+        candidates = sorted(
+            candidates,
+            key=lambda n: len(nx.descendants(self.gt_graph, n[0])),
+            reverse=True
+        )
+        self.target_id, target_name = candidates[0]
+        self.gt_graph.nodes[self.target_id]['dname'] = 'T.' + target_name
+        try:
+            self.target_pid = int(target_name)
+        except:
+            self.target_pid = -1
 
     def gen_graph(self):
         self.local2perception = {
@@ -112,6 +123,10 @@ class DepGraph():
             self.gt_graph.nodes[self.target_id]['dname'] = \
                     f"T.{self.gt_graph.nodes[self.target_id]['dname']}"
             if self.target_id in self.graph.nodes:
+                try:
+                    self.target_pid = int(self.local2perception[self.target_id])
+                except:
+                    self.target_pid = -1
                 self.graph.nodes[self.target_id]['dname'] = \
                         f"T.{self.graph.nodes[self.target_id]['dname']}"
 
@@ -149,14 +164,14 @@ class DepGraph():
                     if obj_col_id not in self.graph.nodes:
                         continue
                     add2dict(edges_to_add, (obj_local_id, obj_col_id), 1)
-                    total += 1
                     # print(obj_local_id, obj_col_id)
+                total += 1
             for edge, weight in edges_to_add.items():
                 # print(edge, weight)
                 if edge in self.graph.edges:
                     # print("edge exists")
                     continue
-                self.graph.add_edge(*edge, etype="grasp blocked by", w=total / weight)
+                self.graph.add_edge(*edge, etype="grasp blocked by", w=weight / total)
 
     def update_belief(self):
         # target visible
@@ -191,7 +206,7 @@ class DepGraph():
             if edge not in self.graph.edges:
                 continue
             w = self.graph.edges[edge]['w']
-            update_weights[edge] = {'w': total / w}
+            update_weights[edge] = {'w': w / total}
         nx.set_edge_attributes(self.graph, update_weights)
 
     def heuristic_volume(self, v, n, visualize=False):
@@ -233,6 +248,45 @@ class DepGraph():
         ind2name = dict(self.graph.nodes(data="dname"))
         return [ind2name[v] for v in order]
 
+    def sinks(self, curv=lambda x: x + 0.001):
+        '''
+        return a list of sinks and probabilities for sampling them.
+        curv adjusts the shape of the probability distribution of a sinks.
+        the 'probability' of a sink means how likely it is to be the optimal choice.
+        (this probability is estimated as the sum of probabilities of each simple path to the target, where
+        the probability of each path is the product of the belief of each edge)
+        '''
+        target_id = self.target_id if self.target_id in self.graph.nodes else self.temp_target_id
+        sinks = []
+        probs = []
+        for v, n in list(self.graph.nodes(data="dname")):
+            # only look at sink nodes
+            if self.graph.out_degree(v) > 0 or v == self.temp_target_id:
+                continue
+            if 'H' in n:
+                print("What the... ‽")
+                continue
+
+            # return target if its a sink
+            if v == self.target_id:
+                return [self.target_pid], [1]
+
+            sum_of_prod = 0
+            for paths in nx.all_simple_edge_paths(self.graph, target_id, v):
+                prod = 1
+                for edge in paths:
+                    prod *= self.graph.edges[edge]['w']
+                sum_of_prod += prod
+
+            if sum_of_prod > 0:
+                sinks.append(int(n))
+                probs.append(sum_of_prod)
+
+        print("Probs", probs, sum(probs))
+        probs = curv(np.array(probs))  # curve distribution
+        probs = probs / sum(probs)  # re-normalize
+        return sinks, probs
+
     def draw_graph(self, ground_truth=False, label="dname"):
         if ground_truth:
             graph = self.gt_graph
@@ -264,7 +318,7 @@ class DepGraph():
             {k: (v[0], v[1] - 10)
              for k, v in pos.items()},
             {
-                (i, j): "" if w is None else np.round(w, 2)
+                (i, j): "" if w is None else np.round(w, 4)
                 for i, j, w in graph.edges(data="w")
             },
         )

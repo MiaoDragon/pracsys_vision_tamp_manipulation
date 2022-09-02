@@ -181,15 +181,16 @@ class PerceptionSystem():
                 frame = visualize_coordinate_frame_centered()
                 o3d.visualization.draw_geometries([ovoxel, obox, opcd, frame])
 
-                self.objects[obj_id].update_tsdf(seg_depth_img, seg_color_img, camera_extrinsics, camera_intrinsics, True)
+                # self.objects[obj_id].update_tsdf(seg_depth_img, seg_color_img, camera_extrinsics, camera_intrinsics, True)
                 vvoxel = visualize_voxel(self.objects[obj_id].voxel_x, self.objects[obj_id].voxel_y, self.objects[obj_id].voxel_z,
                                 self.objects[obj_id].get_optimistic_model(), [0,0,1])
                 o3d.visualization.draw_geometries([vvoxel])
             else:
+                pass
                 # cv2.imwrite('seg_depth_img_obj_%d.png' % (obj_id), seg_depth_img/seg_depth_img.max()*255)
                 # cv2.imwrite('seg_color_img_obj_%d.png' % (obj_id), seg_color_img)
 
-                self.objects[obj_id].update_tsdf(seg_depth_img, seg_color_img, camera_extrinsics, camera_intrinsics)
+                # self.objects[obj_id].update_tsdf(seg_depth_img, seg_color_img, camera_extrinsics, camera_intrinsics)
 
 
         # * Occlusion
@@ -319,8 +320,8 @@ class PerceptionSystem():
                                 ((opt_occupied_label[pcd[valid_mask][:,0],pcd[valid_mask][:,1],pcd[valid_mask][:,2]]!=obj_id+1)).reshape(-1)
 
 
-                obj.tsdf[ori_pcd[valid_mask][occupied_mask][:,0],ori_pcd[valid_mask][occupied_mask][:,1],ori_pcd[valid_mask][occupied_mask][:,2]] = obj.max_v * 1.1
-                obj.tsdf_count[ori_pcd[valid_mask][occupied_mask][:,0],ori_pcd[valid_mask][occupied_mask][:,1],ori_pcd[valid_mask][occupied_mask][:,2]] += 10
+                # obj.tsdf[ori_pcd[valid_mask][occupied_mask][:,0],ori_pcd[valid_mask][occupied_mask][:,1],ori_pcd[valid_mask][occupied_mask][:,2]] = obj.max_v * 1.1
+                # obj.tsdf_count[ori_pcd[valid_mask][occupied_mask][:,0],ori_pcd[valid_mask][occupied_mask][:,1],ori_pcd[valid_mask][occupied_mask][:,2]] += 10
 
             if net_occluded is None:
                 net_occluded = occlusion_label != 0 #occlusion_label > 0

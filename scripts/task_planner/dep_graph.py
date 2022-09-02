@@ -139,6 +139,7 @@ class DepGraph():
                 robot,
                 self.execution.scene.workspace,
                 offset2=(0, 0, -pre_grasp_dist),
+                collision_ignored=[obj_perc_id]
             )
             t1 = time.time()
             add2dict(time_info, 'grasps_gen', [t1 - t0])

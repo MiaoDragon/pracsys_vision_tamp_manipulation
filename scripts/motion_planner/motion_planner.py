@@ -800,7 +800,7 @@ class MotionPlanner():
 
         return voxel_pts_total, voxel_face_total
 
-    def collision_msg_from_perceive_obj(self, perceived_obj_msg: PercievedObject, pose: np.ndarray):
+    def collision_msg_from_perceive_obj(self, perceived_obj_msg: PercievedObject, pose: np.ndarray, link_name: str, touch_links: []):
         # we use pose because during planning the pose can easily cahnge
 
         co = CollisionObject()
@@ -821,7 +821,13 @@ class MotionPlanner():
         pose_msg.orientation.z = qz
         pose_msg.orientation.w = qw
         co.primitive_poses = [pose_msg]
-        return co
+
+        # construct the attach object
+        aco = AttachedCollisionObject()
+        aco.link_name = link_name
+        aco.object = co
+        aco.touch_links = touch_links
+        return aco
 
 
     def add_mesh_from_vertices_and_faces(self, vertices, faces, transform, name):

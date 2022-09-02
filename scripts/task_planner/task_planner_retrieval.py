@@ -163,6 +163,7 @@ class TaskPlanner():
                 self.execution.scene.robot.joint_dict,
                 self.execution.scene.robot.init_joint_dict
             )
+            input('before reset...')
             if len(plan_reset) == 0:
                 continue
             self.execution.execute_traj(plan_reset)

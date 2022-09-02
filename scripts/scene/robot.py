@@ -101,7 +101,12 @@ class Robot():
         self.jr = joint_range
 
         self.tip_link_name = tip_link_name
-
+        self.touch_links = [
+            'motoman_right_ee', 'arm_right_link_tool0', 'motoman_right_hand',
+            'robotiq_arg2f_base_link', 'left_outer_knuckle', 'left_outer_finger',
+            'left_inner_finger', 'left_inner_finger_pad', 'left_inner_knuckle',
+            'right_outer_knuckle', 'right_outer_finger', 'right_inner_finger',
+            'right_inner_finger_pad', 'right_inner_knuckle']
         self.transform = tf.quaternion_matrix([ori[3], ori[0], ori[1], ori[2]])
         self.transform[:3, 3] = pos
 

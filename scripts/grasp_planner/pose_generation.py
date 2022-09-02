@@ -7,7 +7,7 @@ import open3d as o3d
 import transformations as tf
 import pybullet as p
 from tqdm import trange
-
+from scene.workspace import Workspace
 
 def geometric_suction_grasp_pose_generation(
     # obj,
@@ -186,8 +186,8 @@ def geometric_gripper_grasp_pose_generation(
     # obj,
     object_id,
     robot,
-    workspace,
-    offset1=(0, 0, 0.0),
+    workspace: Workspace,
+    offset1=(0, 0, -0.03),
     offset2=(0, 0, -0.05),
     resolution=8,
     collision_ignored=[],
@@ -259,9 +259,9 @@ def geometric_gripper_grasp_pose_generation(
         offset1 = (offset1[0], offset1[1], offset1[2] + gw * 0.5)
     elif shape[2] == p.GEOM_CYLINDER or shape[2] == p.GEOM_CAPSULE:
         h, r = shape[3][:2]
-        for z in np.linspace(0.0, 0.3, hres):
+        for z in np.linspace(0.0, 0.5, hres):
             grasps += [[(0, 0, z * h), o] for o in vert]
-        for z in np.linspace(-0.1, 0.3, hres):
+        for z in np.linspace(-0.1, 0.5, hres):
             grasps += [
                 [(0, 0, z * h), o]
                 for o in horz[hres * ((res - 1) // 4):hres * ((res + 3) // 4)]
@@ -282,7 +282,6 @@ def geometric_gripper_grasp_pose_generation(
     # offset1 = (offset1[0], offset1[1], offset1[2] + gw)
     # offset2 = (offset2[0], offset2[1], offset2[2] + gw / 2)
     # chain offsets
-    offset2 = (offset1[0] + offset2[0], offset1[1] + offset2[1], offset1[2] + offset2[2])
 
     poses = []
     for pos, rot in grasps:
@@ -292,34 +291,22 @@ def geometric_gripper_grasp_pose_generation(
         # pose2 = [tpos2 + np.add(obj_pos, pos), trot2]
         pos_inv, rot_inv = p.invertTransform(pos, rot)
         off1, roff1 = p.multiplyTransforms((0, 0, 0), rot, offset1, rot_inv)
-        off2, roff2 = p.multiplyTransforms((0, 0, 0), rot, offset2, rot_inv)
         # print(off1, roff1)
         pos1, rot1 = p.multiplyTransforms(off1, roff1, pos, rot)
-        pos2, rot2 = p.multiplyTransforms(off2, roff2, pos, rot)
 
         tpos1, trot1 = p.multiplyTransforms(obj_pos, obj_rot, pos1, rot1)
-        tpos2, trot2 = p.multiplyTransforms(obj_pos, obj_rot, pos2, rot2)
         pose1 = [tpos1, trot1]
-        pose2 = [tpos2, trot2]
-        poses.append([pose1, pose2, rot])
+        poses.append([pose1, rot])
 
     endEffectorId = robot.tip_link_name
 
     # init_states = robot.joint_vals
     filteredJointPoses = []
-    for pose1, pose2, lrot in poses:
+    for pose1, lrot in poses:
         pos1, rot1 = pose1
-        pos2, rot2 = pose2
         # self.set_joints(self.nuetral_joints)
         robot.set_joints_without_memorize(robot.init_joint_vals)
         # jointPoses, dist = robot.accurateIK(
-        valid, jointPoses2 = robot.get_ik(
-            endEffectorId,
-            pos2,
-            rot2,
-            robot.init_joint_vals,
-            # threshold=stopThreshold,
-        )
         valid, jointPoses = robot.get_ik(
             endEffectorId,
             pos1,
@@ -330,6 +317,7 @@ def geometric_gripper_grasp_pose_generation(
         # input(rot1)
         # if dist < filterThreshold:  # filter by succesful IK
         if valid:
+            # input('checking pose...')
             # robot.set_gripper(endEffectorId, 'open', reset=True)
             joint_states = [
                 x[0] for x in p.getJointStates(robot.robot_id, range(robot.num_joints))
@@ -350,19 +338,15 @@ def geometric_gripper_grasp_pose_generation(
                     collisions.add(obj_pid)
             # dont add if collides with shelf
             # if not collisions.intersection([1, 2, 3, 4, 5]):
-            if not collisions.intersection([1]):
+            if not collisions.intersection(workspace.component_ids):
                 filteredJointPoses.append(
                     {
                         'all_joints':
                         joint_states,
                         'dof_joints':
                         jointPoses,
-                        'dof_joints_offset':
-                        jointPoses2,
                         'eof_pose':
                         list(pos1) + list(rot1),
-                        'eof_pose_offset':
-                        list(pos2) + list(rot2),
                         'collisions':
                         collisions,
                         'heuristic':
@@ -374,14 +358,10 @@ def geometric_gripper_grasp_pose_generation(
                         )[0][2]
                     }
                 )
-
-    # self.set_joints(init_states)
     robot.set_joints_without_memorize(robot.joint_vals)
 
     # return pose and collisions in sorted order
     filteredJointPoses = sorted(
-        # filteredJointPoses,
-        # key=lambda x: (len(x['collisions']), x['dist']),
         filteredJointPoses,
         key=lambda x: (len(x['collisions']), x['heuristic'])
     )

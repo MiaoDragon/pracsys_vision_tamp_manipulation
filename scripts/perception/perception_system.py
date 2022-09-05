@@ -19,6 +19,7 @@ LOG = 0
 
 class PerceptionSystem():
     def __init__(self, occlusion_params, object_params, target_params, tsdf_color_flag=False):
+        self.p2l_pid = {}
         occlusion = SceneBelief(**occlusion_params)
         self.object_params = object_params  # resol and scale
         self.target_params = target_params  # for recognizing target object
@@ -150,7 +151,7 @@ class PerceptionSystem():
 
             if (not (obj_id in self.objects)):
                 # create new object
-                new_object = ObjectBelief(obj_id, self.data_assoc.obj_ids_reverse[obj_id], xmin, ymin, zmin, xmax, ymax, zmax, self.object_params['resol'], self.object_params['scale'], use_color=self.tsdf_color_flag)
+                new_object = ObjectBelief(obj_id, self.data_assoc.obj_ids_reverse[obj_id], self.p2l_pid[str(self.data_assoc.obj_ids_reverse[obj_id])], xmin, ymin, zmin, xmax, ymax, zmax, self.object_params['resol'], self.object_params['scale'], use_color=self.tsdf_color_flag)
                 self.objects[obj_id] = new_object
                 self.obj_initial_poses[obj_id] = new_object.transform
 

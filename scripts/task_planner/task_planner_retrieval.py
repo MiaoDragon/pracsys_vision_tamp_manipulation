@@ -110,6 +110,7 @@ class TaskPlanner():
 
     def pipeline_sim(self):
         print("** Perception Started... **")
+        self.perception.p2l_pid = self.execution.object_local_id_dict
         self.planner.pipeline_sim()
         print("** Perception Done! **")
 

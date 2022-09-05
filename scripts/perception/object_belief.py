@@ -17,7 +17,7 @@ import trimesh
 DEBUG = False
 
 class ObjectBelief():
-    def __init__(self, obj_id, pybullet_id, xmin, ymin, zmin, xmax, ymax, zmax, resol, scale=0.03, use_color=False):
+    def __init__(self, obj_id, pybullet_id, local_pybullet_id, xmin, ymin, zmin, xmax, ymax, zmax, resol, scale=0.03, use_color=False):
         """
         initialize the object model to be the bounding box containing the conservative volume of the object
 
@@ -90,9 +90,9 @@ class ObjectBelief():
 
         # perfect perceptions stuff:
         self.transform = translation_quaternion2homogeneous(
-            *p.getBasePositionAndOrientation(pybullet_id)
+            *p.getBasePositionAndOrientation(local_pybullet_id)
         )
-        shape = p.getCollisionShapeData(pybullet_id, -1)[0]
+        shape = p.getCollisionShapeData(local_pybullet_id, -1)[0]
         if shape[2] == p.GEOM_BOX:
             size_x = shape[3][0]
             size_y = shape[3][1]

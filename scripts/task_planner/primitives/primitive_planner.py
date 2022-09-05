@@ -23,6 +23,9 @@ from .rearrangement import Rearrangement
 from . import utils, obj_pose_generation
 from motion_planner.motion_planner import MotionPlanner
 
+from sensor_msgs.msg import Image
+from pracsys_vision_tamp_manipulation.msg import RobotState
+
 
 class PrimitivePlanner():
 
@@ -791,10 +794,12 @@ class PrimitivePlanner():
         self.motion_planner.clear_octomap()
         print("keys:", list(self.perception.filtered_occluded_dict.keys()))
         print("keys2:", list(self.perception.objects.keys()))
+        print("id?:",obj_id)
         self.set_collision_env(
-            list(self.perception.filtered_occluded_dict.keys()),
+            list(self.perception.objects.keys()),
             [],
-            list(self.perception.filtered_occluded_dict.keys()),
+            # list(self.perception.filtered_occluded_dict.keys()),
+            [obj_id],
             padding=4,
         )
 
@@ -1257,23 +1262,26 @@ class PrimitivePlanner():
         # occlusion_filter = self.prev_occluded
         occlusion_filter = np.array(self.perception.filtered_occluded)
 
-        for id in occlusion_obj_list:
+        for id_o in occlusion_obj_list:
             # if id == move_obj_idx:
             #     continue
             # should include occlusion induced by this object
 
-            if id not in ignore_occlusion_list:
-                occlusion_filter = occlusion_filter | \
-                        self.perception.filtered_occluded_dict[id]
-            if id not in ignore_occupied_list:
-                occupied_filter = occupied_filter | (self.perception.occupied_dict_t[id])
+            if id_o not in ignore_occlusion_list:
+                occlusion_filter = occlusion_filter | (
+                    self.perception.filtered_occluded_dict[id_o]
+                )
+            if id_o not in ignore_occupied_list:
+                occupied_filter = occupied_filter | (
+                    self.perception.occupied_dict_t[id_o]
+                )
 
         # mask out the ignored obj
         if padding > 0:
 
-            for id in ignore_occupied_list:
-                pcd = self.perception.objects[id].sample_conservative_pcd()
-                obj_transform = self.perception.objects[id].transform
+            for id_i in ignore_occupied_list:
+                pcd = self.perception.objects[id_i].sample_conservative_pcd()
+                obj_transform = self.perception.objects[id_i].transform
                 pcd = obj_transform[:3, :3].dot(pcd.T).T + obj_transform[:3, 3]
                 transform = self.perception.occlusion.transform
                 transform = np.linalg.inv(transform)
@@ -1745,6 +1753,12 @@ class PrimitivePlanner():
         return success
 
     def pipeline_sim(self, visualize=False):
+        color_msg = rospy.wait_for_message('rgb_image', Image, timeout=10)
+        depth_msg = rospy.wait_for_message('depth_image', Image, timeout=10)
+        seg_msg = rospy.wait_for_message('seg_image', Image, timeout=10)
+        state_msg = rospy.wait_for_message(
+            'robot_state_publisher', RobotState, timeout=10
+        )
         self.perception.pipeline_sim(
             self.execution.color_img,
             self.execution.depth_img,

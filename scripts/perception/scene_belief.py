@@ -366,7 +366,11 @@ class SceneBelief():
             # depth_img = cv2.resize(depth_img, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_LINEAR)
             # depth_img = cv2.resize(depth_img, ori_shape, interpolation=cv2.INTER_LINEAR)
             # depth_img = cv2.resize(depth_img, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_LINEAR)
-            depth_img = cv2.medianBlur(np.float32(depth_img), 5)
+
+            # cv2.imshow('masked depth', depth_img)
+            # depth_img = cv2.medianBlur(np.float32(depth_img), 20)
+            # cv2.imshow('blurred masked depth', depth_img)
+            # cv2.waitKey()
 
             occluded_i = self.scene_occlusion(depth_img, None, camera_extrinsics, camera_intrinsics)
 

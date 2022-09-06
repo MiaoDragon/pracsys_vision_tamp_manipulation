@@ -35,6 +35,7 @@ class DepGraph():
         self.perception = perception
         self.pybullet_id = self.execution.scene.robot.pybullet_id
         self.target_id = None
+        self.target_pid = -1
         self.temp_target_id = None
         # self.gt_graph = None
         self.graph = None
@@ -51,19 +52,23 @@ class DepGraph():
         self.gen_grasps()
         self.update_belief()
 
-    # def select_target(self):
-    #     if self.gt_graph is None:
-    #         print("Generate dep-graph before selecting target.")
-    #         return
-    #     candidates = list(
-    #         filter(
-    #             lambda n: n[1] == 'H',
-    #             self.gt_graph.nodes(data="dname"),
-    #         )
-    #     )
-    #     candidates = candidates if candidates else list(self.gt_graph.nodes(data="dname"))
-    #     self.target_id, self.target_dname = choice(candidates)
-    #     self.gt_graph.nodes[self.target_id]['dname'] = 'T.' + self.target_dname
+    def select_target(self):
+        if self.gt_graph is None:
+            print("Generate dep-graph before selecting target.")
+            return
+
+        
+        candidates = list(
+            filter(
+                lambda n: n[1] == 'H',
+                self.gt_graph.nodes(data="dname"),
+            )
+        )
+        candidates = candidates if candidates else list(self.gt_graph.nodes(data="dname"))
+        self.target_id, self.target_dname = choice(candidates)
+        self.gt_graph.nodes[self.target_id]['dname'] = 'T.' + self.target_dname
+
+
 
     def gen_graph(self):
         # self.local2perception = {
@@ -88,6 +93,7 @@ class DepGraph():
             if obj_pi != 'H':
                 if int(obj_pi) == self.perception.target_obj:
                     self.target_id = obj_i
+                    self.target_pid = obj_pi
                 self.graph.add_node(obj_i, dname=obj_pi)
             # self.gt_graph.add_node(obj_i, dname=obj_pi)
             for j in range(i + 1, p.getNumBodies(physicsClientId=self.pybullet_id)):
@@ -96,6 +102,7 @@ class DepGraph():
                 if obj_pj != 'H':
                     if int(obj_pj) == self.perception.target_obj:
                         self.target_id = obj_j
+                        self.target_pid = obj_pj
                     self.graph.add_node(obj_j, dname=obj_pj)
                 # self.gt_graph.add_node(obj_j, dname=obj_pj)
                 contacts = p.getClosestPoints(
@@ -118,9 +125,14 @@ class DepGraph():
                 #     self.gt_graph.add_edge(obj_j, obj_i, etype="below", w=1)
 
         if self.target_id:
-            # self.gt_graph.nodes[self.target_id]['dname'] = \
-            #         f"T.{self.gt_graph.nodes[self.target_id]['dname']}"
+            self.gt_graph.nodes[self.target_id]['dname'] = \
+                    f"T.{self.gt_graph.nodes[self.target_id]['dname']}"
             if self.target_id in self.graph.nodes:
+                try:
+                    self.target_pid = int(self.local2perception[self.target_id])
+                except:
+                    self.target_pid = -1
+
                 self.graph.nodes[self.target_id]['dname'] = \
                         f"T.{self.graph.nodes[self.target_id]['dname']}"
 
@@ -203,6 +215,48 @@ class DepGraph():
             w = self.graph.edges[edge]['w']
             update_weights[edge] = {'w': total / w}
         nx.set_edge_attributes(self.graph, update_weights)
+
+
+
+    def sinks(self, curv=lambda x: x + 0.001):
+        '''
+        return a list of sinks and probabilities for sampling them.
+        curv adjusts the shape of the probability distribution of a sinks.
+        the 'probability' of a sink means how likely it is to be the optimal choice.
+        (this probability is estimated as the sum of probabilities of each simple path to the target, where
+        the probability of each path is the product of the belief of each edge)
+        '''
+        target_id = self.target_id if self.target_id in self.graph.nodes else self.temp_target_id
+        sinks = []
+        probs = []
+        for v, n in list(self.graph.nodes(data="dname")):
+            # only look at sink nodes
+            if self.graph.out_degree(v) > 0 or v == self.temp_target_id:
+                continue
+            if 'H' in n:
+                print("What the... ‽")
+                continue
+
+            # return target if its a sink
+            if v == self.target_id:
+                return [self.target_pid], [1]
+
+            sum_of_prod = 0
+            for paths in nx.all_simple_edge_paths(self.graph, target_id, v):
+                prod = 1
+                for edge in paths:
+                    prod *= self.graph.edges[edge]['w']
+                sum_of_prod += prod
+
+            if sum_of_prod > 0:
+                sinks.append(int(n))
+                probs.append(sum_of_prod)
+
+        print("Probs", probs, sum(probs))
+        probs = curv(np.array(probs))  # curve distribution
+        probs = probs / sum(probs)  # re-normalize
+        return sinks, probs
+
 
     def heuristic_volume(self, v, n, visualize=False):
         '''

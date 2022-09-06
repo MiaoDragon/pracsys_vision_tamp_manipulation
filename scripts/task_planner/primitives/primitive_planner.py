@@ -66,6 +66,17 @@ class PrimitivePlanner():
             )
         )
 
+
+    def TryMoveOne(self, sinks, probs, pre_grasp_dist=0.02, pre_place_dist=0.08):
+        time_infos = []
+        for obj_id in np.random.choice(sinks, len(sinks), replace=False, p=probs):
+            obj = self.perception.objects[obj_id]
+            success, info = self.TryMoveOneObject(obj, pre_grasp_dist, pre_place_dist)
+            time_infos.append(info)
+            if success:
+                return True, time_infos
+        return False, time_infos
+
     def MoveOrPlaceback(
         self,
         obj: ObjectBelief,
@@ -101,7 +112,7 @@ class PrimitivePlanner():
                 break
 
             ## Set Collision Space ##
-            self.set_collision_env_with_models()
+            self.set_collision_env_with_models(obj.obj_id)
             input('after setting collision...')
             tpk0 = time.time()
             ## Plan Pick ##
@@ -451,7 +462,7 @@ class PrimitivePlanner():
                 print('collision happened!')
                 break
             ## Set Collision Space ##
-            self.set_collision_env_with_models()
+            self.set_collision_env_with_models(obj.obj_id)
 
             pick_joint_dict = robot.joint_vals_to_dict(poseInfo['dof_joints'])
             pick_joint_dict_list = self.motion_planner.ee_approach_plan(
@@ -469,7 +480,7 @@ class PrimitivePlanner():
             new_start_joint_dict = dict(pick_joint_dict_list[-1])
             pick_tip_pose = robot.get_tip_link_pose(new_start_joint_dict)
             lift_tip_pose = np.eye(4)
-            lift_tip_pose[:3, 3] = np.array([0, 0, 0.04])  # lift up by 0.04
+            lift_tip_pose[:3, 3] = np.array([0, 0, 0.06])  # lift up by 0.04
 
             lift_joint_dict_list = self.motion_planner.straight_line_motion(
                 new_start_joint_dict,
@@ -499,6 +510,12 @@ class PrimitivePlanner():
             input('after picking pose...')
             # * remove object from the scene before attaching it later during placement plan
             self.motion_planner.scene_interface.remove_world_object(str(obj.pybullet_id))                
+
+            # * compute the object pose in the gripper. The object is located at the lifted location
+            obj_in_gripper = np.linalg.inv(pick_tip_pose).dot(obj.transform)
+            tip_pose = robot.get_tip_link_pose(new_start_joint_dict)
+            obj_start_pose = tip_pose.dot(obj_in_gripper)
+
 
             for sample_pos in placements:
                 print('trying sample...')
@@ -551,10 +568,9 @@ class PrimitivePlanner():
 
                 # compute the relative pose of object in robot ee
 
-                # - add the attached object geometry to the planner
-                obj_in_gripper = np.linalg.inv(pick_tip_pose).dot(obj.transform)
+                # - add the attached object geometry to the planner: the transform should be the latest transform: i.e. after lifting it up
                 aco = self.motion_planner.collision_msg_from_perceive_obj(self.execution.object_state_msg[str(obj.pybullet_id)], 
-                                                                        obj.transform, link_name=robot.tip_link_name,
+                                                                        obj_start_pose, link_name=robot.tip_link_name,
                                                                         touch_links=robot.touch_links)
 
                 # aco = self.attach_known(obj, robot, grasp_joint_dict)
@@ -613,12 +629,109 @@ class PrimitivePlanner():
                 # update the object mesh model
                 self.execution.update_object_state_from_perception(obj)
                 self.execution.detach_obj()
+                print('after detaching object...')
                 self.execution.execute_traj(lift_joint_dict_list2)
-                return time_info
+                print('after lifting trajectory...')
+                return True, time_info
             # otherwise, reset the object back to its origial place
             self.motion_planner.add_cylinder(str(obj.pybullet_id), obj.transform, obj.obj_model['height'], obj.obj_model['radius'])
 
-        return time_info
+        return False, time_info
+
+    def reset(self, joint_dict=None):
+        if joint_dict is None:
+            joint_dict = self.execution.scene.robot.joint_dict
+        
+        plan_reset = self.motion_planner.joint_dict_motion_plan(
+            joint_dict,
+            self.execution.scene.robot.init_joint_dict
+        )
+        input('before reset...')
+        if len(plan_reset) == 0:
+            return False
+        self.execution.execute_traj(plan_reset)
+        return True
+
+    def pick(self, obj, pre_grasp_dist=0.02):
+        robot = self.execution.scene.robot
+        obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        ## Grasp ##
+        t0 = time.time()
+        filteredPoses = obj_pose_generation.geometric_gripper_grasp_pose_generation(
+            obj_local_id,
+            robot,
+            self.scene.workspace,
+            offset2=(0, 0, -pre_grasp_dist),
+        )
+        t1 = time.time()
+        print("Grasp Time: ", t1 - t0)
+        eof_poses = [
+            x['eof_pose_offset'] for x in filteredPoses if len(x['collisions']) == 0
+        ]
+
+        ## Set Collision Space ##
+        self.set_collision_env_with_models(obj.obj_id)
+
+        # pick poses
+        for poseInfo in filteredPoses:
+            if len(poseInfo['collisions']) != 0:
+                break
+
+            pick_joint_dict = robot.joint_vals_to_dict(poseInfo['dof_joints'])
+
+            ## Plan Pick ##
+            t0 = time.time()
+            # pick_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
+            #     robot.joint_dict,
+            #     pick_joint_dict,
+            #     robot,
+            # )
+            pick_joint_dict_list = self.motion_planner.ee_approach_plan(
+                robot.joint_dict,
+                # eof_poses,
+                pick_joint_dict,
+                # robot,
+                disp_dist=pre_grasp_dist,
+                disp_dir=(0, 0, 1),
+                is_pre_dir_abs=False,
+                attached_acos=[],
+            )
+
+            ## Plan Lift ##
+            start_joint_dict = dict(pick_joint_dict_list[-1])
+            pick_tip_pose = robot.get_tip_link_pose(start_joint_dict)
+            lift_tip_pose = np.eye(4)
+            lift_tip_pose[:3, 3] = np.array([0, 0, 0.04])  # lift up by 0.05
+
+            lift_joint_dict_list = self.motion_planner.straight_line_motion(
+                start_joint_dict,
+                pick_tip_pose,
+                lift_tip_pose,
+                robot,
+                collision_check=False,
+                workspace=self.scene.workspace,
+                display=False
+            )
+            # lift_joint_dict_list = self.motion_planner.straight_line_motion2(
+            #     start_joint_dict,
+            #     direction=(0, 0, 1),
+            #     magnitude=0.04,
+            # )
+            t1 = time.time()
+            print("Plan Time: ", t1 - t0)
+
+            ## Execute ##
+            print("Succeded to plan to grasp!")
+            # self.execution.detach_obj()
+            # self.execution.execute_traj(pick_joint_dict_list)
+            # self.execution.attach_obj(obj.obj_id)
+            # self.execution.execute_traj(lift_joint_dict_list)
+            return pick_joint_dict_list, lift_joint_dict_list
+
+        print("Failed to plan to grasp!")
+        return [], []
+
+
 
     def attach_known(self, obj, robot, grasp_joint_dict):
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
@@ -656,7 +769,7 @@ class PrimitivePlanner():
         self.motion_planner.detach_known(str(obj.pybullet_id))
         # self.motion_planner.scene_interface.remove_world_object("TEMP_ATTACHED")
 
-    def set_collision_env_with_models(self):
+    def set_collision_env_with_models_bk(self):
         ## Set Collision Space ##
         obs_msgs = []
         # for obs_id in self.execution.object_state_msg.keys():
@@ -669,6 +782,108 @@ class PrimitivePlanner():
             print(self.execution.object_state_msg[str(obs_id)])
 
         self.motion_planner.set_collision_env_with_models(obs_msgs)
+
+
+
+    def set_collision_env(
+        self,
+        occlusion_obj_list,
+        ignore_occlusion_list,
+        ignore_occupied_list,
+        padding=0,
+    ):
+        """
+        providing the object list to check collision and the ignore list, set up the collision environment
+        """
+
+        start_time = time.time()
+        # occlusion_filter = np.zeros(self.prev_occluded.shape).astype(bool)
+        occupied_filter = np.zeros(self.perception.occupied_label_t.shape).astype(bool)
+
+        # occlusion_filter = self.prev_occluded
+        occlusion_filter = np.array(self.perception.filtered_occluded)
+
+        for id_o in occlusion_obj_list:
+            # if id == move_obj_idx:
+            #     continue
+            # should include occlusion induced by this object
+
+            if id_o not in ignore_occlusion_list:
+                occlusion_filter = occlusion_filter | (
+                    self.perception.filtered_occluded_dict[id_o]
+                )
+            if id_o not in ignore_occupied_list:
+                occupied_filter = occupied_filter | (
+                    self.perception.occupied_dict_t[id_o]
+                )
+
+        # mask out the ignored obj
+        if padding > 0:
+
+            for id_i in ignore_occupied_list:
+                pcd = self.perception.objects[id_i].sample_conservative_pcd()
+                obj_transform = self.perception.objects[id_i].transform
+                pcd = obj_transform[:3, :3].dot(pcd.T).T + obj_transform[:3, 3]
+                transform = self.perception.occlusion.transform
+                transform = np.linalg.inv(transform)
+                pcd = transform[:3, :3].dot(pcd.T).T + transform[:3, 3]
+                pcd = pcd / self.perception.occlusion.resol
+
+                pcd = np.floor(pcd).astype(int)
+
+                occlusion_filter = utils.mask_pcd_xy_with_padding(
+                    occlusion_filter,
+                    pcd,
+                    padding,
+                )
+                occupied_filter = utils.mask_pcd_xy_with_padding(
+                    occupied_filter,
+                    pcd,
+                    padding,
+                )
+                del pcd
+
+        start_time = time.time()
+        self.motion_planner.set_collision_env(
+            self.perception.occlusion,
+            occlusion_filter,
+            occupied_filter,
+        )
+        self.motion_planning_time += time.time() - start_time
+        # self.motion_planning_calls += 1
+        del occlusion_filter
+        del occupied_filter
+
+        gc.collect()
+
+        end_time = time.time()
+        print('set_collision_env takes time: ', end_time - start_time)
+
+
+
+    def set_collision_env_with_models(self, obj_id):
+        ## Set Collision Space ##
+        obs_msgs = []
+        # for obs_id in self.execution.object_state_msg.keys():
+        for obs in self.perception.objects.values():
+            obs_id = obs.pybullet_id
+            # print(obs_id)
+            # print(self.execution.object_state_msg[str(obs_id)].name)
+            obs_msgs.append(self.execution.object_state_msg[str(obs_id)])
+        self.motion_planner.set_collision_env_with_models(obs_msgs)
+        self.motion_planner.clear_octomap()
+        print("keys:", list(self.perception.filtered_occluded_dict.keys()))
+        print("keys2:", list(self.perception.objects.keys()))
+        print("id?:",obj_id)
+        self.set_collision_env(
+            list(self.perception.objects.keys()),
+            [],
+            # list(self.perception.filtered_occluded_dict.keys()),
+            [obj_id],
+            padding=2,
+        )
+
+
 
     def pipeline_sim(self, visualize=True):
         # sense & perceive

@@ -89,8 +89,9 @@ class Workspace():
 
         # create top wall
         component_name = 'top'
-        shape = np.array([extend_x, extend_y, width])
-        pos = np.array([mid_x, mid_y, top_z])
+        top_padding = 0.1
+        shape = np.array([extend_x, extend_y, width+top_padding])
+        pos = np.array([mid_x, mid_y, top_z+top_padding/2])
         ori = [0,0,0,1]
         cid = create_box(shape, pos, ori, pid)
         add_component(cid, pos, ori, shape, component_name)
@@ -136,16 +137,28 @@ class Workspace():
         self.ori = np.array([1.,0,0,0])
 
         # modify the workspace_low and high by using the padding
-        workspace_low = np.array([front_x,right_y,bot_z])
+        workspace_low = np.array([front_x,right_y,bot_z+width/2])
         workspace_high = np.array([back_x,left_y,top_z])
 
-        workspace_low[1] = workspace_low[1]# + padding[1]
-        workspace_high[0] = workspace_high[0]# - padding[0]
-        workspace_high[1] = workspace_high[1]# - padding[1]
+        padding = [0.07, 0.02]
+        # workspace_low[1] = workspace_low[1] + padding[1]
+        # workspace_low[2] = worksapce_low[2] + 0.02
+        # workspace_high[0] = workspace_high[0] - padding[0]
+        # workspace_high[1] = workspace_high[1] - padding[1]
+        self.workspace_low = workspace_low
+        self.workspace_high = workspace_high
+
 
         self.region_low = np.array(workspace_low)# + np.array(base_pos)  # the bounding box of the valid regions in the workspace
         self.region_high = np.array(workspace_high)# + np.array(base_pos)
-        
+        self.region_low[0] = self.region_low[0] + padding[0]
+        self.region_low[1] = self.region_low[1] + padding[1]
+        self.region_low[2] = self.region_low[2] + 0.02
+        self.region_high[0] = self.region_high[0] - padding[0]
+        self.region_high[1] = self.region_high[1] - padding[1]
+
+
+
         self.bbox_lls = bbox_lls
         self.bbox_uls = bbox_uls
         self.transforms = transforms

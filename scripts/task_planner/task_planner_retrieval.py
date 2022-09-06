@@ -41,7 +41,7 @@ class TaskPlanner():
         workspace = self.scene.workspace
         workspace_low = workspace.region_low
         workspace_high = workspace.region_high
-        resol = np.array([0.01, 0.01, 0.01])
+        resol = np.array([0.02, 0.02, 0.02])
         world_x = workspace_high[0] - workspace_low[0]
         world_y = workspace_high[1] - workspace_low[1]
         world_z = workspace_high[2] - workspace_low[2]
@@ -100,6 +100,58 @@ class TaskPlanner():
         self.pipeline_sim()
         self.num_executed_actions = 0
         self.num_collision = 0
+        self.dep_graph.first_run()
+        self.dep_graph.draw_graph(True)
+        self.dep_graph.draw_graph()
+
+
+
+    def alg_pipeline(self):
+        TryMoveOne = self.planner.TryMoveOne
+        MoveOrPlaceback = self.planner.MoveOrPlaceback
+        Retrieve = self.planner.pick
+
+        time_infos = []
+
+        failure = False
+        while failure == False:
+            sinks, probs = self.dep_graph.sinks()
+            target = self.dep_graph.target_pid
+            print("target?", target, sinks, probs)
+            if target in sinks:
+                break
+            success, info = TryMoveOne(sinks, probs)
+            time_infos += info
+            if not success:
+                failure = True
+                for sink in sinks:
+                    obj = self.perception.objects[sink]
+                    # TODO: debug MoveOrPlaceback, especially for intermediate sensing step. We might need to filter out robot
+                    # success, info = MoveOrPlaceback(obj)
+                    # time_infos.append(info)
+                    # if not success:
+                    #     continue
+                    success, info = TryMoveOne(sinks, probs)
+                    time_infos += info
+                    if not success:
+                        continue
+                    failure = False
+                    break
+            # update the scene
+            self.planner.reset()
+            self.pipeline_sim()
+
+            self.dep_graph.rerun()
+            self.dep_graph.draw_graph()
+
+        if failure:
+            return False
+        else:
+            print('target object found!')
+            # obj = self.perception.objects[target]
+            # Retrieve(obj)
+            return True
+
 
     def pipeline_sim(self):
         print("** Perception Started... **")
@@ -184,8 +236,8 @@ def main():
     task_planner = TaskPlanner(scene_name, prob_id)
     # input('ENTER to start planning...')
     print('pid: ', task_planner.scene.pid)
-    task_planner.run_pipeline()
-
+    # task_planner.run_pipeline()
+    task_planner.alg_pipeline()
 
 if __name__ == "__main__":
     main()

@@ -23,28 +23,30 @@ import matplotlib.pyplot as plt
 import skg
 import pickle
 from pracsys_vision_tamp_manipulation.srv import SegmentationSrv
+from scene.sim_scene import SimScene
 import transformations as tf
 import trimesh
 ### This file defines the real camera for the purpose of getting the images of the physical camera
 
 class CylinderSegmentation():
 
-    def __init__(self, camera):
-        self.camera = camera  # camera model
+    def __init__(self, scene: SimScene):
+        self.scene = scene
+        # self.camera = camera  # camera model
         self.bridge = CvBridge()
         self.getDepthIntrinsicInfo()
     def getDepthIntrinsicInfo(self):
-        intrinsics = self.camera.info['intrinsics']
+        intrinsics = self.scene.camera.info['intrinsics']
         self.depth_camera_info = dict()
         self.depth_camera_info['intrinsics'] = dict()
         self.depth_camera_info['intrinsics']['fx'] = intrinsics[0,0]
         self.depth_camera_info['intrinsics']['fy'] = intrinsics[1,1]
         self.depth_camera_info['intrinsics']['ppx'] = intrinsics[0,2]
         self.depth_camera_info['intrinsics']['ppy'] = intrinsics[1,2]
-        self.depth_camera_info['height'] = self.camera.info['img_shape'][0]
-        self.depth_camera_info['width'] = self.camera.info['img_shape'][1]
+        self.depth_camera_info['height'] = self.scene.camera.info['img_shape'][0]
+        self.depth_camera_info['width'] = self.scene.camera.info['img_shape'][1]
 
-        extrinsics = self.camera.info['extrinsics']
+        extrinsics = self.scene.camera.info['extrinsics']
         self.depth_camera_info['extrinsics'] = np.array(extrinsics)
 
         # depth_camera_info_msg = rospy.wait_for_message('/camera/aligned_depth_to_color/camera_info', CameraInfo)
@@ -89,9 +91,18 @@ class CylinderSegmentation():
                 qz = resp.cylinders[i].transform.rotation.z
                 transform = tf.quaternion_matrix([qw,qx,qy,qz])
                 transform[:3,3] = tran
+                # NOTE: update to consider only full tall objects in the scene. Use the table shape to change the shape of the object
+                z_min = self.scene.workspace.workspace_low[2]
+                # get the transform of the object in the world frame
+                extrinsics = self.depth_camera_info['extrinsics']
+                pose_in_world = extrinsics.dot(transform)
+                z_len = pose_in_world[2,3] + height/2 - z_min
+                pose_in_world[2,3] = z_min + z_len/2
+                transform = np.linalg.inv(extrinsics).dot(pose_in_world)
+
                 cylinder_i['mid_center'] = mid_center
                 cylinder_i['radius'] = radius
-                cylinder_i['height'] = height
+                cylinder_i['height'] = z_len#height
                 cylinder_i['axis'] = axis
                 cylinder_i['transform'] = transform
                 cylinder_i['shape'] = 'cylinder'
@@ -105,21 +116,11 @@ class CylinderSegmentation():
                 cylinder_i['pcd'] = pcd
                 cylinder_models.append(cylinder_i)
 
-            # seg_img = np.zeros(rgb_img.shape).astype(float)/255
-            # rgb_img = cv2.cvtColor(rgb_img.astype(np.float32), cv2.COLOR_BGR2RGB)
-            # colors = [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,0,1],[0,1,1]]
-            # for i in range(len(cylinder_models)):
-            #     cylinder = cylinder_models[i]
-            #     pcd_i = np.array(cylinder['pcd'])
-            #     ind_i = self.convert_pcd_to_indices(pcd_i)
-            #     # seg_img[ind_i[:,0], ind_i[:,1]] = colors[i]
-            #     seg_img[ind_i[:,0], ind_i[:,1]] = rgb_img[ind_i[:,0],ind_i[:,1]]
-
             poses = [cylinder_models[i]['transform'] for i in range(len(cylinder_models))]
             # cv2.imshow("segmentation", seg_img)
             # cv2.waitKey(0)
 
-            seg_img = np.zeros(self.camera.info['img_shape']).astype(int)-1
+            seg_img = np.zeros(self.scene.camera.info['img_shape']).astype(int)-1
 
             for i in range(len(cylinder_models)):
                 cylinder = cylinder_models[i]

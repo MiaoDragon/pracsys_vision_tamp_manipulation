@@ -178,6 +178,7 @@ class ExecutionInterface():
         """
         call execution_system to attach the object
         """
+        print('attaching object...')
         start_time = time.time()
         rospy.wait_for_service('attach_object', timeout=10)
 
@@ -312,6 +313,32 @@ class ExecutionInterface():
             self.attached_obj = None
             self.attached_pose = None
 
+
+
+    def remove_brightness(self, rgb):
+        """
+        This function removes the light impact on the object by
+        increasing the saturation and value of the color cluster
+
+        Args:
+            color_cluster: a cluster with points (np.array, #points * 3 channels),
+            each of which has 3 color channels (RGB)
+
+        Return:
+            the color_cluster without light impact
+        """
+        print('original color: ', rgb)
+        rgb = np.array(rgb).reshape((1,1,3)).astype(float)  # input: 0-255
+        print('before color: ', rgb)
+        rgb_float32 = np.float32(rgb) ### change to float type
+        rgb_hsv = cv2.cvtColor(rgb_float32, cv2.COLOR_RGB2HSV_FULL) ### convert rgb to hsv
+        rgb_hsv[0,0,1] = np.float32(1.0) ## maximize saturation
+        rgb_hsv[0,0,2] = np.float32(1.0) ## maximize value
+        rgb = cv2.cvtColor(rgb_hsv, cv2.COLOR_HSV2RGB_FULL).astype(np.float32).reshape((3))
+        # self.visualize_point_cloud(pcd_cluster, color_cluster, show_normal=False)
+        return rgb*255
+
+
     def update_object_state(self, msg: PercievedObject):
         self.object_state_msg[msg.name] = msg
         position = [
@@ -326,6 +353,16 @@ class ExecutionInterface():
             msg.pose.orientation.w,
         ]
         if msg.name not in self.object_local_id_dict:
+
+            # if the color is white then don't consider. Otherwise remove the light issue
+            color = [msg.color[0], msg.color[1], msg.color[2]]
+
+            if color[0] > 180 and color[1] > 180 and color[2] > 180:
+                pass
+            else:
+                color = self.remove_brightness(color)
+
+
             shape_type = self.shape_type_dict[msg.solid.type]
             # print(
             #     shape_type,
@@ -333,9 +370,12 @@ class ExecutionInterface():
             #     position,
             #     orientation,
             # )
+            rgba_color = [color[0],color[1],color[2],255]
+            rgba_color = np.array(rgba_color)/255
             oid = self.spawn_object(
                 shape_type,
                 msg.solid.dimensions,
+                rgba_color,
                 position,
                 orientation,
             )
@@ -352,8 +392,19 @@ class ExecutionInterface():
         p_name = msg.name
         # if self.object_local_id_dict[msg.name] == self.target_obj_id:
         # target is red...
-        if msg.color[0] > 200 and msg.color[1] < 100 and msg.color[2] < 100:
-            p_name = 'T.' + p_name
+
+        # if the color is white then don't consider. Otherwise remove the light issue
+        color = [msg.color[0], msg.color[1], msg.color[2]]
+
+        if color[0] > 180 and color[1] > 180 and color[2] > 180:
+            pass
+        else:
+            color = self.remove_brightness(color)
+            if color[0] > 200 and color[1] < 120 and color[2] < 120:
+                p_name = 'T.' + p_name
+                print('target found!')
+        print("color: ", color)
+
         x_pos = 0.5 * msg.solid.dimensions[self.r_index(
             self.shape_type_dict[msg.solid.type]
         )]
@@ -423,6 +474,7 @@ class ExecutionInterface():
         self,
         shape_type,
         dimensions,
+        rgba_color,
         position=[0, 0, 2],
         orientation=[0, 0, 0, 1],
     ):
@@ -435,10 +487,18 @@ class ExecutionInterface():
             height=dimensions[0],  # [0] if CYLINDER
             physicsClientId=self.scene.robot.pybullet_id,
         )
+        vid = p.createVisualShape(shapeType=shape_type,
+                    halfExtents=np.multiply(0.5, dimensions),  # array of half dimensions if BOX
+                    radius=dimensions[self.r_index(shape_type)],  # [0] if SPHERE, [1] if CYLINDER
+                    length=dimensions[0],  # [0] if CYLINDER
+                    physicsClientId=self.scene.robot.pybullet_id,
+                    rgbaColor=rgba_color,)
+
         mass = 0  # static box
         oid = p.createMultiBody(
             mass,
             cuid,
+            vid,
             basePosition=position,
             baseOrientation=orientation,
             physicsClientId=self.scene.robot.pybullet_id,

@@ -34,7 +34,7 @@ class PerceptionSystem():
 
         self.scene = scene
         self.data_assoc = CylinderDataAssociation(object_params)
-        self.segmentation = CylinderSegmentation(scene.camera)
+        self.segmentation = CylinderSegmentation(scene)
         self.target_obj = None
         
     def perceive(self, depth_img, color_img, seg_img, seen_obj_models: dict):
@@ -79,6 +79,7 @@ class PerceptionSystem():
         obj_pcds = {}
         obj_opt_pcds = {}
         obj_poses = {}
+        v_pcds = []
         for i, obj in self.objects.items():
             # for checking occupied space, use conservative volume
             pcd = obj.sample_conservative_pcd(n_sample=10)
@@ -87,6 +88,22 @@ class PerceptionSystem():
             obj_poses[i] = np.array(obj.transform)
             obj_pcds[i] = pcd
             obj_opt_pcds[i] = opt_pcd
+
+
+            pcd = np.array(pcd)
+            pcd = obj_poses[i][:3,:3].dot(pcd.T).T + obj_poses[i][:3,3]
+            pcd = self.occlusion.world_in_voxel_rot.dot(pcd.T).T + self.occlusion.world_in_voxel_tran
+            pcd = pcd / self.occlusion.resol
+            color = np.zeros((len(pcd),3)) + np.array([0,0,1]).reshape((1,3))
+            v_pcd = visualize_pcd(pcd, color)
+            v_pcds.append(v_pcd)
+
+
+
+        vis_occ = visualize_voxel(self.occlusion.voxel_x, self.occlusion.voxel_y, self.occlusion.voxel_z, occluded, [1,0,0])
+        o3d.visualization.draw_geometries([vis_occ]+v_pcds)
+
+
 
         # label the occlusion
         occlusion_label, occupied_label, occluded_dict, occupied_dict = \
@@ -241,11 +258,11 @@ class PerceptionSystem():
             # seg_rgb_img = (seg_rgb_img * 255).astype(int)
             print('seg_rgb_img shape: ', seg_rgb_img.shape)            
             seg_rgb_img = cv2.cvtColor(seg_rgb_img.astype('float32'), cv2.COLOR_BGR2RGB)
-            cv2.imshow("segmentation", seg_rgb_img.astype('float32'))
+            # cv2.imshow("segmentation", seg_rgb_img.astype('float32'))
         
         visualize_assoc(seg_img)
 
-        cv2.imshow('depth', depth_img)
+        # cv2.imshow('depth', depth_img)
 
         cv2.waitKey(0)
 

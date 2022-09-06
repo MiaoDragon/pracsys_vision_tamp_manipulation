@@ -33,7 +33,7 @@ class ObjectBelief():
         self.obj_mesh = obj_mesh
         self.obj_shape = obj_model['shape']
         self.obj_model = obj_model
-        pcd = trimesh.sample.volume_mesh(obj_mesh, 2500)
+        pcd = trimesh.sample.volume_mesh(obj_mesh, 5000)
         self.pcd = np.array(pcd)
 
         self.origin_x = xmin

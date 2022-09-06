@@ -385,6 +385,38 @@ class CylinderSegmentation():
         return self.rough_pose_estimation(num_objs)
 
 
+
+
+    def RemoveLightImpact(self, pcd_cluster, color_cluster):
+        """
+        This function removes the light impact on the object by
+        increasing the saturation and value of the color cluster
+
+        Args:
+            color_cluster: a cluster with points (np.array, #points * 3 channels),
+            each of which has 3 color channels (RGB)
+
+        Return:
+            the color_cluster without light impact
+        """
+        print('before hsv,,,', color_cluster.mean(0))
+        n_points = color_cluster.shape[0]
+        n_channels = color_cluster.shape[1]
+        color_cluster = color_cluster.reshape((1, n_points, n_channels)) ### reshape the color_cluster to image format
+        color_cluster = color_cluster * 255 ### get the real rgb values
+        color_cluster_float32 = np.float32(color_cluster) ### change to float type
+        color_cluster_hsv = cv2.cvtColor(color_cluster_float32, cv2.COLOR_RGB2HSV_FULL) ### convert rgb to hsv
+        for i in range(n_points):
+            color_cluster_hsv[0][i][1] = np.float32(1.0) ## maximize saturation
+            color_cluster_hsv[0][i][2] = np.float32(1.0) ## maximize value
+        color_cluster = cv2.cvtColor(color_cluster_hsv, cv2.COLOR_HSV2RGB_FULL).astype(np.float32)
+        color_cluster = color_cluster.reshape((n_points, n_channels))
+        # self.visualize_point_cloud(pcd_cluster, color_cluster, show_normal=False)
+        print('afterward, color: ', color_cluster.mean(0))
+        return color_cluster
+
+
+
     def rough_pose_estimation(self, num_objects, filter_plane=False):
         """
         filter_plane can be used for preprocessing the workspace when camera and workspace changes
@@ -509,6 +541,8 @@ class CylinderSegmentation():
             # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=mask)
 
             pcd_i, color_i = self.crop_pcd(mask, point_cloud, pcd_color)
+            color_i_after = self.RemoveLightImpact(pcd_i, color_i)
+            
             mid_center, R, height, axis, rot_mat, cylinder = self.fit_cylinder(pcd_i, bot_plane[:3])
             cylinders.append(cylinder)
             cylinder_model = {'mid_center': mid_center, 'radius': R, 'height': height, 'axis': axis, 'transform': rot_mat, 'pcd': np.array(pcd_i), 'color':np.mean(color_i,axis=0)}

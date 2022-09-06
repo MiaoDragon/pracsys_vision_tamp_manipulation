@@ -164,8 +164,10 @@ class TaskPlanner():
         time_infos = []
 
         failure = False
+        need_rerank = True
         while failure == False:
-            sinks, probs = self.dep_graph.sinks()
+            if need_rerank:
+                sinks, probs = self.dep_graph.sinks()
             target = self.dep_graph.target_pid
             print("target?", target, sinks, probs)
             if target in sinks:
@@ -180,7 +182,16 @@ class TaskPlanner():
                     time_infos.append(info)
                     if not success:
                         continue
-                    success, info = TryMoveOne(sinks, probs)
+                    new_sinks, new_probs = self.dep_graph.sinks()
+                    if len(new_sinks & sinks) > len(sinks):
+                        sinks, probs = new_sinks, new_probs
+                        failure = False
+                        break
+                    ind_ignore = sinks.index(sink)
+                    success, info = TryMoveOne(
+                        [s for i, s in enumerate(sinks) if i != ind_ignore],
+                        [p for i, p in enumerate(probs) if i != ind_ignore]
+                    )
                     time_infos += info
                     if not success:
                         continue

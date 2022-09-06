@@ -87,6 +87,7 @@ class PrimitivePlanner():
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
         time_info = {"success": False, "action": "MoveOrPlaceback"}
+        did_uncover = False
         total0 = time.time()
 
         ## Generate Grasps ##
@@ -182,6 +183,8 @@ class PrimitivePlanner():
             time_info['execute_pick'] = t1 - t0
             print("Execute pick time: ", time_info['execute_pick'])
 
+            print("Occluded Before:", self.perception.filtered_occluded.sum())
+            prev_volume = self.perception.filtered_occluded.sum()
             ## Update Perception ##
             print("** Perception Started... **")
             t0 = time.time()
@@ -189,6 +192,13 @@ class PrimitivePlanner():
             t1 = time.time()
             add2dict(time_info, 'perception', [t1 - t0])
             print("** Perception Done! (", time_info['perception'][-1], ") **")
+            print("Occluded After:", self.perception.filtered_occluded.sum())
+            volume = self.perception.filtered_occluded.sum()
+            print("Change:", volume - prev_volume)
+            if volume < prev_volume:
+                did_uncover = True
+            else:
+                did_uncover = False
 
             ## Generate Placements ##
             t0 = time.time()
@@ -792,15 +802,15 @@ class PrimitivePlanner():
             obs_msgs.append(self.execution.object_state_msg[str(obs_id)])
         self.motion_planner.set_collision_env_with_models(obs_msgs)
         self.motion_planner.clear_octomap()
-        print("keys:", list(self.perception.filtered_occluded_dict.keys()))
-        print("keys2:", list(self.perception.objects.keys()))
-        print("id?:",obj_id)
+        # print("keys:", list(self.perception.filtered_occluded_dict.keys()))
+        # print("keys2:", list(self.perception.objects.keys()))
+        # print("id?:",obj_id)
         self.set_collision_env(
             list(self.perception.objects.keys()),
             [],
             # list(self.perception.filtered_occluded_dict.keys()),
             [obj_id],
-            padding=4,
+            padding=5,
         )
 
     def place(self, obj, start_joint_dict, grasp_joint_dict, pre_place_dist=0.08):

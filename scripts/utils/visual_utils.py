@@ -157,14 +157,14 @@ def create_material(rgba, shader):
 
 import copy
 import pybullet as p
-import transformations as tf
+import transformations
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import time
 
 
 def transform_pybullet_obj(obj_id, obj_pybullet_pose, pid):
-    quat = tf.quaternion_from_matrix(obj_pybullet_pose)  # w x y z
+    quat = transformations.quaternion_from_matrix(obj_pybullet_pose)  # w x y z
     p.resetBasePositionAndOrientation(
         obj_id,
         obj_pybullet_pose[:3, 3],

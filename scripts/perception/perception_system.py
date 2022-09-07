@@ -36,7 +36,13 @@ class PerceptionSystem():
         self.data_assoc = CylinderDataAssociation(object_params)
         self.segmentation = CylinderSegmentation(scene)
         self.target_obj = None
-        
+    
+
+    def detect_obj(self, obj: ObjectBelief):
+        if obj.color[0] > 200 and obj.color[1] < 120 and obj.color[2] < 120:
+            return True
+        else:
+            return False
     def perceive(self, depth_img, color_img, seg_img, seen_obj_models: dict):
         """
         for new object models, append to the object list
@@ -55,6 +61,7 @@ class PerceptionSystem():
         obj_models = []
         for obj_id, obj_model in seen_obj_models.items():
             if obj_id in self.objects:
+                self.objects[obj_id].update_sense_transform(obj_model['transform'])
                 continue
             obj_ids.append(obj_id)
             obj_models.append(obj_model)
@@ -66,8 +73,10 @@ class PerceptionSystem():
             new_obj_id = obj_ids[sort_indices[i]]
             obj_model = obj_models[sort_indices[i]]
             obj = ObjectBelief(new_obj_id, self.object_params['resol'], obj_model)
-            if obj.color[0] > 200 and obj.color[1] < 100 and obj.color[2] < 100:
+
+            if self.detect_obj(obj):
                 self.target_obj = new_obj_id
+
             self.objects[new_obj_id] = obj
             self.obj_initial_poses[new_obj_id] = np.array(obj_model['transform'])
 
@@ -111,14 +120,6 @@ class PerceptionSystem():
                                                 obj_poses, obj_pcds, obj_opt_pcds)
 
 
-        voxels = []
-        for i, obj in self.objects.items():
-            if occluded_dict[i].astype(int).sum() == 0:
-                continue
-            color = from_color_map(i, 16)
-            vis_voxel = visualize_voxel(self.occlusion.voxel_x, self.occlusion.voxel_y, self.occlusion.voxel_z, occluded_dict[i], color)
-            voxels.append(vis_voxel)
-        o3d.visualization.draw_geometries(voxels)
 
         if len(self.sensed_imgs) == 0:
             self.sensed_imgs.append(depth_img)
@@ -140,6 +141,17 @@ class PerceptionSystem():
         # self.filtered_occupied_label = filtered_occupied_label
         self.filtered_occluded_dict = filtered_occluded_dict
         print("*** labels written ***")
+
+
+        voxels = []
+        for i, obj in self.objects.items():
+            if filtered_occluded_dict[i].astype(int).sum() == 0:
+                continue
+            color = from_color_map(i, 16)
+            vis_voxel = visualize_voxel(self.occlusion.voxel_x, self.occlusion.voxel_y, self.occlusion.voxel_z, filtered_occluded_dict[i], color)
+            voxels.append(vis_voxel)
+        o3d.visualization.draw_geometries(voxels)
+
 
 
     def filtering(self, camera_extrinsics, camera_intrinsics):

@@ -315,30 +315,6 @@ class ExecutionInterface():
 
 
 
-    def remove_brightness(self, rgb):
-        """
-        This function removes the light impact on the object by
-        increasing the saturation and value of the color cluster
-
-        Args:
-            color_cluster: a cluster with points (np.array, #points * 3 channels),
-            each of which has 3 color channels (RGB)
-
-        Return:
-            the color_cluster without light impact
-        """
-        print('original color: ', rgb)
-        rgb = np.array(rgb).reshape((1,1,3)).astype(float)  # input: 0-255
-        print('before color: ', rgb)
-        rgb_float32 = np.float32(rgb) ### change to float type
-        rgb_hsv = cv2.cvtColor(rgb_float32, cv2.COLOR_RGB2HSV_FULL) ### convert rgb to hsv
-        rgb_hsv[0,0,1] = np.float32(1.0) ## maximize saturation
-        rgb_hsv[0,0,2] = np.float32(1.0) ## maximize value
-        rgb = cv2.cvtColor(rgb_hsv, cv2.COLOR_HSV2RGB_FULL).astype(np.float32).reshape((3))
-        # self.visualize_point_cloud(pcd_cluster, color_cluster, show_normal=False)
-        return rgb*255
-
-
     def update_object_state(self, msg: PercievedObject):
         self.object_state_msg[msg.name] = msg
         position = [
@@ -355,12 +331,12 @@ class ExecutionInterface():
         if msg.name not in self.object_local_id_dict:
 
             # if the color is white then don't consider. Otherwise remove the light issue
-            color = [msg.color[0], msg.color[1], msg.color[2]]
+            color = [msg.color[0], msg.color[1], msg.color[2]]  # we set the color in perception
 
-            if color[0] > 180 and color[1] > 180 and color[2] > 180:
-                pass
-            else:
-                color = self.remove_brightness(color)
+            # if color[0] > 180 and color[1] > 180 and color[2] > 180:
+            #     pass
+            # else:
+            #     color = self.remove_brightness(color)
 
 
             shape_type = self.shape_type_dict[msg.solid.type]
@@ -396,13 +372,15 @@ class ExecutionInterface():
         # if the color is white then don't consider. Otherwise remove the light issue
         color = [msg.color[0], msg.color[1], msg.color[2]]
 
-        if color[0] > 180 and color[1] > 180 and color[2] > 180:
-            pass
-        else:
-            color = self.remove_brightness(color)
-            if color[0] > 200 and color[1] < 120 and color[2] < 120:
-                p_name = 'T.' + p_name
-                print('target found!')
+        # if color[0] > 180 and color[1] > 180 and color[2] > 180:
+        #     pass
+        # else:
+        #     color = self.remove_brightness(color)
+        if color[0] > 200 and color[1] < 120 and color[2] < 120:
+            p_name = 'T.' + p_name
+            print('target found!')
+
+
         print("color: ", color)
 
         x_pos = 0.5 * msg.solid.dimensions[self.r_index(

@@ -70,6 +70,30 @@ class CylinderSegmentation():
         indices = np.floor(indices).astype(int)
         return indices
 
+
+    def remove_brightness(self, rgb):
+        """
+        This function removes the light impact on the object by
+        increasing the saturation and value of the color cluster
+
+        Args:
+            color_cluster: a cluster with points (np.array, #points * 3 channels),
+            each of which has 3 color channels (RGB)
+
+        Return:
+            the color_cluster without light impact
+        """
+        print('original color: ', rgb)
+        rgb = np.array(rgb).reshape((1,1,3)).astype(float)  # input: 0-255
+        print('before color: ', rgb)
+        rgb_float32 = np.float32(rgb) ### change to float type
+        rgb_hsv = cv2.cvtColor(rgb_float32, cv2.COLOR_RGB2HSV_FULL) ### convert rgb to hsv
+        rgb_hsv[0,0,1] = np.float32(1.0) ## maximize saturation
+        rgb_hsv[0,0,2] = np.float32(1.0) ## maximize value
+        rgb = cv2.cvtColor(rgb_hsv, cv2.COLOR_HSV2RGB_FULL).astype(np.float32).reshape((3))
+        # self.visualize_point_cloud(pcd_cluster, color_cluster, show_normal=False)
+        return rgb*255
+
     def segmentation(self, num_objs):
         rospy.wait_for_service("segmentation")
         try:
@@ -106,7 +130,19 @@ class CylinderSegmentation():
                 cylinder_i['axis'] = axis
                 cylinder_i['transform'] = transform
                 cylinder_i['shape'] = 'cylinder'
-                cylinder_i['color'] = resp.cylinders[i].color
+
+                # decide the color
+                color = [resp.cylinders[i].color[0], resp.cylinders[i].color[1], resp.cylinders[i].color[2]]
+
+                if color[0] > 180 and color[1] > 180 and color[2] > 180:
+                    # considered uninteresting objects
+                    pass
+                else:
+                    color = self.remove_brightness(color)  # preprocess the color
+
+                cylinder_i['color'] = color
+
+
                 pts = resp.cylinders[i].pcd.points
                 pcd = []
                 for j in range(len(pts)):

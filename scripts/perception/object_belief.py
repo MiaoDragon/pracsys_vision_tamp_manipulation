@@ -93,6 +93,18 @@ class ObjectBelief():
         self.color = obj_model['color']
 
 
+        # for multiple sensing and updating the location
+        self.sensed_times = 1
+    
+    def update_sense_transform(self, sensed_transform):
+        # given the sensed transform and current transform, update the x-y position by taking an average
+        pos = self.transform[:2,3]
+        new_pos = (pos * self.sensed_times + sensed_transform[:2,3]) / (self.sensed_times+1)
+        new_transform = np.array(self.transform)
+        new_transform[:2,3] = new_pos
+        self.update_transform(new_transform)
+
+
     def get_optimistic_model(self):
         return (self.voxel > 0)
 

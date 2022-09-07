@@ -23,8 +23,13 @@ import matplotlib.pyplot as plt
 import skg
 import pickle
 from pracsys_vision_tamp_manipulation.srv import SegmentationSrv
-import transformations as tf
+import transformations
 import rospkg
+import tf
+
+from sensor_msgs.msg import JointState
+from perception.robot_filter import Robot
+from utils.visual_utils import *
 
 ### This file defines the real camera for the purpose of getting the images of the physical camera
 
@@ -33,15 +38,22 @@ class CylinderSegmentation():
     def __init__(self):
         # self.camera = camera  # camera model
         self.bridge = CvBridge()
-        self.getDepthIntrinsicInfo()
         self.plane_threshold = 0.04
         self.depth_topic = '/camera/aligned_depth_to_color/image_raw'
         self.color_topic = '/camera/color/image_raw'
+        self.robot_topic = '/left_right_joint_states'
         self.mode = 'real'  # sim and real uses different settings
         self.rp = rospkg.RosPack()
-        self.package_path = self.rp.get_path('pracsys_vision_tamp_manipulation')
+        package_path = self.rp.get_path('pracsys_vision_tamp_manipulation')
+        self.package_path = package_path
         self.plane_fname = os.path.join(self.package_path, 'scripts/plane_models.pkl')
+        self.listener = tf.TransformListener()
 
+        urdf_path = os.path.join(package_path,'data/models/robot/motoman_dual.urdf')    
+        tip_link_name = 'motoman_right_ee'
+        tip_joint_name = 'arm_right_joint_7_t'
+        self.robot = Robot(urdf_path, tip_link_name, tip_joint_name, resol=0.02)
+        self.getDepthIntrinsicInfo()
 
     def getDepthIntrinsicInfo(self):
         # intrinsics = self.camera.info['intrinsics']
@@ -63,6 +75,13 @@ class CylinderSegmentation():
         self.depth_camera_info['intrinsics']['ppy'] = depth_camera_info_msg.K[5]
         self.depth_camera_info['height'] = depth_camera_info_msg.height        
         self.depth_camera_info['width'] = depth_camera_info_msg.width
+
+        (trans,rot) = self.listener.lookupTransform('/base', '/camera_color_optical_frame', rospy.Time(0))  # transformation of camera in base, i.e.  R T C
+
+        qx,qy,qz,qw = rot
+        rot_mat = transformations.quaternion_matrix([qw,qx,qy,qz])
+        rot_mat[:3,3] = trans
+        self.depth_camera_info['extrinsics'] = rot_mat
         print(self.depth_camera_info)
 
     def convert_depth_to_point_cloud(self, depth_numpy_image):
@@ -507,6 +526,52 @@ class CylinderSegmentation():
         # input("see point cloud after filtering out large planes")
 
         # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False)
+
+        extrinsics = self.depth_camera_info['extrinsics']
+        pcd = extrinsics[:3,:3].dot(point_cloud.T).T + extrinsics[:3,3]
+        
+        # * filter out point cloud that belongs to the robot
+        # read the robot state
+        robot_state = rospy.wait_for_message(self.robot_topic, JointState)
+        joints = self.robot.joint_state_to_joints(robot_state)
+
+        robot_mask = np.zeros(len(pcd)).astype(bool)
+        vis_voxels = []
+        for link_name, _ in self.robot.voxel_link_dict.items():
+            voxel_transform = self.robot.get_link_voxel_transform(link_name, joints)
+            voxel_transform = np.linalg.inv(voxel_transform)
+            transformed_pcd = voxel_transform[:3,:3].dot(pcd.T).T + voxel_transform[:3,3]
+            transformed_pcd = transformed_pcd / self.robot.resol
+            vis_pcd = transformed_pcd
+            # TODO: check which ones are in robot voxel, and filter them out
+            transformed_pcd = np.floor(transformed_pcd).astype(int)
+            voxel_shape = self.robot.voxel_link_dict[link_name].shape
+            valid_mask =  (transformed_pcd[:,0] >= 0) & (transformed_pcd[:,0] < voxel_shape[0]) & \
+                        (transformed_pcd[:,1] >= 0) & (transformed_pcd[:,1] < voxel_shape[1]) & \
+                        (transformed_pcd[:,2] >= 0) & (transformed_pcd[:,2] < voxel_shape[2])
+            if valid_mask.sum() > 0:
+                print('link %s has pcd in robot' % (link_name))
+            update_mask = robot_mask[valid_mask]
+            transformed_pcd = transformed_pcd[valid_mask]
+            voxel = self.robot.voxel_link_dict[link_name]
+            if valid_mask.sum() > 0:
+                print('number of pcd in the voxel: ', voxel[transformed_pcd[:,0],transformed_pcd[:,1],transformed_pcd[:,2]].astype(int).sum())
+            update_mask |= voxel[transformed_pcd[:,0],transformed_pcd[:,1],transformed_pcd[:,2]]
+            robot_mask[valid_mask] |= update_mask
+
+            # voxel_x, voxel_y, voxel_z = np.indices(voxel_shape)
+            # vis_voxel = visualize_voxel(voxel_x, voxel_y, voxel_z, self.robot.voxel_link_dict[link_name], [1,0,0])
+            # # get voxel transform in camera
+            # v_pcd = visualize_pcd(vis_pcd, pcd_color)
+            # o3d.visualization.draw_geometries([v_pcd, vis_voxel])
+
+        # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False)
+
+        # self.visualize_point_cloud(point_cloud, pcd_color, show_normal=False, mask=robot_mask)
+
+        point_cloud, pcd_color = self.crop_pcd(~robot_mask, point_cloud, pcd_color)
+
+
         mask = self.outlier_filter_pcd(point_cloud, pcd_color)
         print('after outlier_filter_pcd...')
         point_cloud, pcd_color = self.crop_pcd(mask, point_cloud, pcd_color)
@@ -567,11 +632,6 @@ def main():
     segmentation = CylinderSegmentation()
     rate = rospy.Rate(10) ### 10hz
     rospy.sleep(1.0)
-    color_image_msg = rospy.wait_for_message('/camera/color/image_raw', Image)
-    depth_image_msg = rospy.wait_for_message('/camera/aligned_depth_to_color/image_raw', Image)
-    # depth_numpy_image = ros_numpy.image.image_to_numpy(depth_image_msg)
-    color_numpy_image = segmentation.bridge.imgmsg_to_cv2(color_image_msg, 'passthrough') / 255
-    depth_numpy_image = segmentation.bridge.imgmsg_to_cv2(depth_image_msg, 'passthrough')
 
     segmentation.estimate()
     count = 0

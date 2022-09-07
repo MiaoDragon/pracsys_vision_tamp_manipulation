@@ -423,7 +423,7 @@ class PrimitivePlanner():
         print("Total time: ", time_info['total'])
         return time_info
 
-    def TryMoveOneObject(self, obj, pre_grasp_dist=0.02, pre_place_dist=0.08):
+    def TryMoveOneObject(self, obj, pre_grasp_dist=0.05, pre_place_dist=0.08):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
         time_info = {"success": False}
@@ -475,6 +475,9 @@ class PrimitivePlanner():
                 is_pre_dir_abs=False,
                 attached_acos=[],
             )
+
+            if len(pick_joint_dict_list) == 0:
+                return False, time_info
 
             ## Plan Lift ##
             new_start_joint_dict = dict(pick_joint_dict_list[-1])

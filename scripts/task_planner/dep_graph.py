@@ -125,8 +125,8 @@ class DepGraph():
                 #     self.gt_graph.add_edge(obj_j, obj_i, etype="below", w=1)
 
         if self.target_id:
-            self.gt_graph.nodes[self.target_id]['dname'] = \
-                    f"T.{self.gt_graph.nodes[self.target_id]['dname']}"
+            self.graph.nodes[self.target_id]['dname'] = \
+                    f"T.{self.graph.nodes[self.target_id]['dname']}"
             if self.target_id in self.graph.nodes:
                 try:
                     self.target_pid = int(self.local2perception[self.target_id])
@@ -258,12 +258,14 @@ class DepGraph():
         return sinks, probs
 
 
-    def heuristic_volume(self, v, n, visualize=False):
+    def heuristic_volume(self, v, n, visualize=True):
         '''
         v <- node id
         n <- node name
         '''
-        total_occluded = self.perception.filtered_occlusion_label == int(n) + 1
+        # total_occluded = self.perception.filtered_occlusion_label == int(n) + 1
+        total_occluded = self.perception.filtered_occluded_dict[int(n)]
+
         if visualize:
             print(n, total_occluded.sum(), total_occluded.any(2).sum())
             free_x, free_y = np.where(total_occluded.any(2))
@@ -278,7 +280,7 @@ class DepGraph():
             o = self.graph.nodes[x]['dname']
             if o == 'H':
                 print("Error‽")
-            total_occluded |= self.perception.filtered_occlusion_label == int(o) + 1
+            total_occluded |= self.perception.filtered_occluded_dict[int(o)]
 
         if visualize:
             print(n, total_occluded.sum(), total_occluded.any(2).sum())

@@ -152,7 +152,7 @@ class PrimitivePlanner():
             )
             tpk1 = time.time()
             add2dict(time_info, 'total_pick', tpk1 - tpk0)
-            print("Total Place Time: ", time_info['total_pick'])
+            print("Total Pick Time: ", time_info['total_pick'])
 
             ## Plan Intermediate ##
             t0 = time.time()
@@ -460,7 +460,7 @@ class PrimitivePlanner():
             )
             tpk1 = time.time()
             add2dict(time_info, 'total_pick', tpk1 - tpk0)
-            print("Total Place Time: ", time_info['total_pick'])
+            print("Total Pick Time: ", time_info['total_pick'])
 
             if self.dep_graph and self.dep_graph.target_id and self.dep_graph.target_id in self.dep_graph.graph:
                 print("** Target Seen, Skipping Intermediate **")
@@ -680,37 +680,36 @@ class PrimitivePlanner():
     def pick(self, obj, pre_grasp_dist=0.02):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
-        ## Grasp ##
+        time_info = {"success": False, "action": "Retrieve"}
+        total0 = time.time()
+
+        ## Generate Grasps ##
         t0 = time.time()
-        filteredPoses = obj_pose_generation.geometric_gripper_grasp_pose_generation(
-            obj_local_id,
-            robot,
-            self.scene.workspace,
-            offset2=(0, 0, -pre_grasp_dist),
-        )
+        if self.dep_graph and self.dep_graph.grasps and obj_local_id in self.dep_graph.grasps:
+            filteredPoses = self.dep_graph.grasps[obj_local_id]
+        else:
+            filteredPoses = obj_pose_generation.geometric_gripper_grasp_pose_generation(
+                obj_local_id,
+                robot,
+                self.scene.workspace,
+                offset2=(0, 0, -pre_grasp_dist),
+            )
         t1 = time.time()
-        print("Grasp Time: ", t1 - t0)
-        eof_poses = [
-            x['eof_pose_offset'] for x in filteredPoses if len(x['collisions']) == 0
-        ]
+        time_info['grasps_gen'] = t1 - t0
+        print("Grasp Generation Time: ", time_info['grasps_gen'])
 
-        ## Set Collision Space ##
-        self.set_collision_env_with_models(obj.obj_id)
-
-        # pick poses
+        # planning for each grasp until success
         for poseInfo in filteredPoses:
             if len(poseInfo['collisions']) != 0:
                 break
 
-            pick_joint_dict = robot.joint_vals_to_dict(poseInfo['dof_joints'])
+            ## Set Collision Space ##
+            self.set_collision_env_with_models(obj.obj_id)
 
+            tpk0 = time.time()
             ## Plan Pick ##
             t0 = time.time()
-            # pick_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
-            #     robot.joint_dict,
-            #     pick_joint_dict,
-            #     robot,
-            # )
+            pick_joint_dict = robot.joint_vals_to_dict(poseInfo['dof_joints'])
             pick_joint_dict_list = self.motion_planner.ee_approach_plan(
                 robot.joint_dict,
                 # eof_poses,
@@ -721,15 +720,22 @@ class PrimitivePlanner():
                 is_pre_dir_abs=False,
                 attached_acos=[],
             )
+            t1 = time.time()
+            add2dict(time_info, 'pick_plan', [t1 - t0])
+            print("Pick Plan Time: ", time_info['pick_plan'][-1])
+            if not pick_joint_dict_list:
+                tpk1 = time.time()
+                add2dict(time_info, 'total_pick', tpk1 - tpk0)
+                continue
 
             ## Plan Lift ##
-            start_joint_dict = dict(pick_joint_dict_list[-1])
-            pick_tip_pose = robot.get_tip_link_pose(start_joint_dict)
+            new_start_joint_dict = dict(pick_joint_dict_list[-1])
+            pick_tip_pose = robot.get_tip_link_pose(new_start_joint_dict)
             lift_tip_pose = np.eye(4)
-            lift_tip_pose[:3, 3] = np.array([0, 0, 0.04])  # lift up by 0.05
+            lift_tip_pose[:3, 3] = np.array([0, 0, 0.04])  # lift up by 0.04
 
             lift_joint_dict_list = self.motion_planner.straight_line_motion(
-                start_joint_dict,
+                new_start_joint_dict,
                 pick_tip_pose,
                 lift_tip_pose,
                 robot,
@@ -737,24 +743,29 @@ class PrimitivePlanner():
                 workspace=self.scene.workspace,
                 display=False
             )
-            # lift_joint_dict_list = self.motion_planner.straight_line_motion2(
-            #     start_joint_dict,
-            #     direction=(0, 0, 1),
-            #     magnitude=0.04,
-            # )
-            t1 = time.time()
-            print("Plan Time: ", t1 - t0)
-
+            tpk1 = time.time()
+            add2dict(time_info, 'total_pick', tpk1 - tpk0)
+            print("Total Pick Time: ", time_info['total_pick'])
             ## Execute ##
-            print("Succeded to plan to grasp!")
-            # self.execution.detach_obj()
-            # self.execution.execute_traj(pick_joint_dict_list)
-            # self.execution.attach_obj(obj.obj_id)
-            # self.execution.execute_traj(lift_joint_dict_list)
-            return pick_joint_dict_list, lift_joint_dict_list
+            print(f"Succeded to plan move for Object {obj.obj_id}!")
+            t0 = time.time()
+            self.execution.detach_obj()
+            self.execution.execute_traj(pick_joint_dict_list)
+            self.execution.attach_obj(obj.obj_id)
+            self.execution.execute_traj(lift_joint_dict_list)
+            t1 = time.time()
+            time_info['execute'] = t1 - t0
+            print("Execute time: ", time_info['execute'])
+            time_info["success"] = True
+            total1 = time.time()
+            time_info['total'] = total1 - total0
+            print("Total time: ", time_info['total'])
+            return True, time_info
 
-        print("Failed to plan to grasp!")
-        return [], []
+        total1 = time.time()
+        time_info['total'] = total1 - total0
+        print("Total time: ", time_info['total'])
+        return False, time_info
 
     def attach_known(self, obj, robot, grasp_joint_dict):
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
@@ -810,7 +821,7 @@ class PrimitivePlanner():
             [],
             # list(self.perception.filtered_occluded_dict.keys()),
             [obj_id],
-            padding=5,
+            padding=6,
         )
 
     def place(self, obj, start_joint_dict, grasp_joint_dict, pre_place_dist=0.08):

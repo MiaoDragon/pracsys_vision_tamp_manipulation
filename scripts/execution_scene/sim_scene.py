@@ -513,7 +513,7 @@ class ExecutionSystem():
 
 def main():
     rospy.init_node("execution_system")
-    rospy.on_shutdown(lambda: os.system('pkill -9 -f task_planner'))
+    rospy.on_shutdown(lambda: os.system('pkill -9 -f sim_scene'))
     # rospy.sleep(1.0)
     scene_name = 'scene_table'
 

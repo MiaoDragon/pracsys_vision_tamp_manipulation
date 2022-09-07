@@ -31,6 +31,9 @@ import transformations as tf
 
 from utils.visual_utils import *
 
+PYBULLET_MODE = p.DIRECT
+# PYBULLET_MODE = p.GUI
+
 
 def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
     """
@@ -38,7 +41,7 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
     last one object is the target object
     """
     # load scene definition file
-    pid = p.connect(p.GUI)
+    pid = p.connect(PYBULLET_MODE)
     f = open(scene, 'r')
     scene_dict = json.load(f)
 
@@ -317,7 +320,7 @@ def random_one_problem(scene, level, num_objs, num_hiding_objs, safety_padding=0
     level = 3: hard
     """
     # load scene definition file
-    pid = p.connect(p.GUI)
+    pid = p.connect(PYBULLET_MODE)
     f = open(scene, 'r')
     scene_dict = json.load(f)
 
@@ -647,7 +650,7 @@ def load_problem(
 ):
 
     # load scene definition file
-    pid = p.connect(p.GUI)
+    pid = p.connect(PYBULLET_MODE)
     f = open(scene, 'r')
     scene_dict = json.load(f)
 
@@ -778,7 +781,7 @@ def random_one_problem_level(
     TODO: construct new object sets for each level of difficulty
     """
     # load scene definition file
-    pid = p.connect(p.GUI)
+    pid = p.connect(PYBULLET_MODE)
     f = open(scene, 'r')
     scene_dict = json.load(f)
 
@@ -1148,9 +1151,7 @@ def load_problem_level(
 ):
 
     # load scene definition file
-    # pid = p.connect(p.GUI, options="--opengl2")
-    pid = p.connect(p.GUI)
-    # pid = p.connect(p.DIRECT)
+    pid = p.connect(PYBULLET_MODE)
 
     f = open(scene, 'r')
     scene_dict = json.load(f)
@@ -1276,7 +1277,7 @@ def random_one_problem_ycb(scene, level, num_objs, num_hiding_objs, safety_paddi
     last one object is the target object
     """
     # load scene definition file
-    pid = p.connect(p.GUI)
+    pid = p.connect(PYBULLET_MODE)
 
     f = open(scene, 'r')
     scene_dict = json.load(f)
@@ -1650,9 +1651,7 @@ def random_one_problem_ycb(scene, level, num_objs, num_hiding_objs, safety_paddi
 def load_problem_ycb(scene, obj_poses, obj_shapes, target_pose, target_obj_shape):
 
     # load scene definition file
-    # pid = p.connect(p.GUI)
-    pid = p.connect(p.GUI)
-    # pid = p.connect(p.DIRECT)
+    pid = p.connect(PYBULLET_MODE)
 
     f = open(scene, 'r')
     scene_dict = json.load(f)

@@ -542,7 +542,7 @@ class MotionPlanner():
 
         # self.move_group.set_planner_id('PersistentLazyPRM')
 
-        self.move_group.set_planner_id('BiTRRT')
+        # self.move_group.set_planner_id('BiTRRT')
         self.move_group.set_start_state(moveit_robot_state)
 
         self.move_group.set_joint_value_target(goal_joint_dict)

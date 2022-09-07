@@ -60,9 +60,9 @@ class PerceptionSystem():
 
         # generate valid objects: objects that are not hidden by others
         valid_objects = []
-        for obj_id, obj_hide_set in obj_hide_sets.items():
-            if len(obj_hide_set) == 0:
-                valid_objects.append(obj_id)
+        # for obj_id, obj_hide_set in obj_hide_sets.items():
+        #     if len(obj_hide_set) == 0:
+        #         valid_objects.append(obj_id)
 
 
         for obj_id in sensed_obj_ids:
@@ -154,6 +154,7 @@ class PerceptionSystem():
                 new_object = ObjectBelief(obj_id, self.data_assoc.obj_ids_reverse[obj_id], self.p2l_pid[str(self.data_assoc.obj_ids_reverse[obj_id])], xmin, ymin, zmin, xmax, ymax, zmax, self.object_params['resol'], self.object_params['scale'], use_color=self.tsdf_color_flag)
                 self.objects[obj_id] = new_object
                 self.obj_initial_poses[obj_id] = new_object.transform
+                self.objects[obj_id].set_active()
 
             # expand the model if inactive
             if not self.objects[obj_id].active:
@@ -390,7 +391,7 @@ class PerceptionSystem():
 
         # objects that have been revealed will stay revealed
 
-        valid_objects = self.obtain_unhidden_objects(robot_ids, workspace_ids)
+        valid_objects = [] #self.obtain_unhidden_objects(robot_ids, workspace_ids)
 
         object_hide_set = self.obtain_object_hide_set(robot_ids, workspace_ids)
 

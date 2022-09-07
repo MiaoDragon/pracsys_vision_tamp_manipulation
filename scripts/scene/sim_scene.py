@@ -9,12 +9,13 @@ import pybullet as p
 import rospkg
 import os
 
+PYBULLET_MODE = p.DIRECT
+# PYBULLET_MODE = p.GUI
 
 class SimScene():
 
     def __init__(self, scene_dict):
-        # pid = p.connect(p.DIRECT)
-        pid = p.connect(p.GUI)
+        pid = p.connect(PYBULLET_MODE)
 
         rp = rospkg.RosPack()
         package_path = rp.get_path('vbcpm_execution_system')

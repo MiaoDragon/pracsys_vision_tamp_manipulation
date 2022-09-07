@@ -105,14 +105,22 @@ class TaskPlanner():
         self.pipeline_sim()
         self.dep_graph.first_run()
         self.execution.target_obj_id = self.dep_graph.target_id
-        self.dep_graph.draw_graph(True)
-        self.dep_graph.draw_graph()
+        # self.dep_graph.draw_graph(True)
+        # self.dep_graph.draw_graph()
 
     def pipeline_sim(self):
         print("** Perception Started... **")
         self.perception.p2l_pid = self.execution.object_local_id_dict
         self.planner.pipeline_sim()
         print("** Perception Done! **")
+
+    def reset(self):
+        plan_reset = self.planner.motion_planner.joint_dict_motion_plan(
+            self.execution.scene.robot.joint_dict,
+            self.execution.scene.robot.init_joint_dict
+        )
+        if len(plan_reset) > 0:
+            self.execution.execute_traj(plan_reset)
 
     def run_pipeline(self, ):
         ### Grasp Sampling Test ###
@@ -153,10 +161,10 @@ class TaskPlanner():
                 else:
                     print(f'{tt}: {tm}')
             self.dep_graph.rerun()
-            self.dep_graph.draw_graph()
+            # self.dep_graph.draw_graph()
         ### Pick Test End ###
 
-    def alg_pipeline(self):
+    def alg_pipeline(self, timeout=60 * 60):
         TryMoveOne = self.planner.TryMoveOne
         MoveOrPlaceback = self.planner.MoveOrPlaceback
         Retrieve = self.planner.pick
@@ -165,27 +173,36 @@ class TaskPlanner():
 
         failure = False
         need_rerank = True
-        while failure == False:
+        # while failure == False:
+        while time.time() - t0 < timeout and not failure:
+            failure = True
             if need_rerank:
+                self.dep_graph.rerun()
+                # self.dep_graph.draw_graph()
                 sinks, probs = self.dep_graph.sinks()
+            need_rerank = True
             target = self.dep_graph.target_pid
             print("target?", target, sinks, probs)
             if target in sinks:
+                # self.dep_graph.draw_graph()
+                failure = False
                 break
             success, info = TryMoveOne(sinks, probs)
             time_infos += info
             if not success:
-                failure = True
                 for sink in sinks:
                     obj = self.perception.objects[sink]
                     success, info = MoveOrPlaceback(obj)
                     time_infos.append(info)
                     if not success:
                         continue
+                    self.dep_graph.rerun()
                     new_sinks, new_probs = self.dep_graph.sinks()
+                    # self.dep_graph.draw_graph()
                     if len(new_sinks & sinks) > len(sinks):
                         sinks, probs = new_sinks, new_probs
                         failure = False
+                        need_rerank = False
                         break
                     ind_ignore = sinks.index(sink)
                     success, info = TryMoveOne(
@@ -197,23 +214,55 @@ class TaskPlanner():
                         continue
                     failure = False
                     break
-            self.dep_graph.rerun()
-            self.dep_graph.draw_graph()
+            else:
+                failure = False
 
         if failure:
-            return False
+            return False, time_infos
         else:
             obj = self.perception.objects[target]
             Retrieve(obj)
-            return True
+            return True, time_infos
 
-    def reset(self):
-        plan_reset = self.planner.motion_planner.joint_dict_motion_plan(
-            self.execution.scene.robot.joint_dict,
-            self.execution.scene.robot.init_joint_dict
-        )
-        if len(plan_reset) > 0:
-            self.execution.execute_traj(plan_reset)
+    def alg_random(self, timeout=60 * 60):
+        MoveOrPlaceback = self.planner.MoveOrPlaceback
+        Retrieve = self.planner.pick
+
+        time_infos = []
+
+        t0 = time.time()
+        failure = True
+        while time.time() - t0 < timeout:
+            self.dep_graph.gen_graph()
+            self.dep_graph.gen_grasps()
+            sinks = []
+            for v, n in list(self.dep_graph.graph.nodes(data="dname")):
+                # only look at sink nodes
+                if self.dep_graph.graph.out_degree(v) > 0:
+                    continue
+                if v == self.dep_graph.target_id:
+                    sinks.append(self.dep_graph.target_pid)
+                else:
+                    sinks.append(int(n))
+            target = self.dep_graph.target_pid
+            if target in sinks:
+                failure = False
+                break
+            sink = np.random.choice(sinks)
+            obj = self.perception.objects[sink]
+            success, info = MoveOrPlaceback(obj)
+            time_infos.append(info)
+
+        if failure:
+            return False, time_infos
+        else:
+            obj = self.perception.objects[target]
+            Retrieve(obj)
+            return True, time_infos
+
+    def save_stats(self, time_infos, fname):
+        with open(fname, 'w') as f:
+            json.dump(time_infos, f)
 
 
 def main():
@@ -226,8 +275,10 @@ def main():
     task_planner = TaskPlanner(scene_name, prob_id)
     # input('ENTER to start planning...')
     print('pid: ', task_planner.scene.pid)
-    task_planner.run_pipeline()
-    task_planner.alg_pipeline()
+    # task_planner.run_pipeline()
+    # success, stats = task_planner.alg_pipeline()
+    success, stats = task_planner.alg_random()
+    task_planner.save_stats(stats, prob_id + '.json')
 
 
 if __name__ == "__main__":

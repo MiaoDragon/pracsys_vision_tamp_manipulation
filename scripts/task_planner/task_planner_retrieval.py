@@ -171,6 +171,7 @@ class TaskPlanner():
 
         time_infos = []
 
+        t0 = time.time()
         failure = False
         need_rerank = True
         # while failure == False:
@@ -268,17 +269,16 @@ class TaskPlanner():
 def main():
     rospy.init_node("task_planner")
     rospy.on_shutdown(lambda: os.system('pkill -9 -f task_planner'))
-    # rospy.sleep(1.0)
     scene_name = 'scene_table'
     prob_id = sys.argv[1]
-    # trial_num = int(sys.argv[2])
     task_planner = TaskPlanner(scene_name, prob_id)
-    # input('ENTER to start planning...')
     print('pid: ', task_planner.scene.pid)
     # task_planner.run_pipeline()
-    # success, stats = task_planner.alg_pipeline()
-    success, stats = task_planner.alg_random()
-    task_planner.save_stats(stats, prob_id + '.json')
+
+    success, stats = task_planner.alg_pipeline()
+    task_planner.save_stats(stats, prob_id + '_pipeline.json')
+    # success, stats = task_planner.alg_random()
+    # task_planner.save_stats(stats, prob_id + '_random.json')
 
 
 if __name__ == "__main__":

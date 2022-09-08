@@ -151,6 +151,11 @@ class DepGraph():
             print("Grasp Generation Time: ", time_info['grasps_gen'][-1])
             self.grasps[obj_local_id] = grasp_poses
 
+            # continue if grasps failed. How would this happen?
+            if len(grasp_poses) == 0:
+                print("No grasps found for object", obj_perc_id, "‽")
+                continue
+
             # continue if there are no blocking objects
             if len(grasp_poses[0]['collisions']) == 0:
                 continue

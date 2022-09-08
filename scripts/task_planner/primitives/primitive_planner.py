@@ -423,7 +423,7 @@ class PrimitivePlanner():
         print("Total time: ", time_info['total'])
         return time_info
 
-    def TryMoveOneObject(self, obj, pre_grasp_dist=0.05, pre_place_dist=0.08):
+    def TryMoveOneObject(self, obj, pre_grasp_dist=0.07, pre_place_dist=0.08):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
         time_info = {"success": False}
@@ -591,8 +591,7 @@ class PrimitivePlanner():
                 if not place_joint_dict_list:
                     print('place planning failed...')
                     continue
-                else:
-                    break
+                break
             input('after placing pose...')
 
             if len(place_joint_dict) > 0:
@@ -617,6 +616,24 @@ class PrimitivePlanner():
                     display=False
                 )
 
+
+                new_start_joint_dict3 = dict(lift_joint_dict_list2[-1])
+                place_tip_pose2 = robot.get_tip_link_pose(new_start_joint_dict3)
+                retreat_tip_pose = np.eye(4)
+                retreat_tip_pose[:3, 3] = np.array([-0.05, 0, 0.])  # retreat
+
+
+                lift_joint_dict_list3 = self.motion_planner.straight_line_motion(
+                    new_start_joint_dict3,
+                    place_tip_pose2,
+                    retreat_tip_pose,
+                    robot,
+                    collision_check=True,
+                    workspace=self.scene.workspace,
+                    display=False
+                )
+
+
                 ## Execute ##
                 print(f"Succeded to plan move for Object {obj.obj_id}!")
                 self.execution.execute_traj(pick_joint_dict_list)
@@ -634,6 +651,7 @@ class PrimitivePlanner():
                 self.execution.detach_obj()
                 print('after detaching object...')
                 self.execution.execute_traj(lift_joint_dict_list2)
+                self.execution.execute_traj(lift_joint_dict_list3)
                 print('after lifting trajectory...')
                 return True, time_info
             # otherwise, reset the object back to its origial place

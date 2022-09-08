@@ -98,7 +98,7 @@ class Workspace():
 
         # create bot wall
         component_name = 'bottom'
-        bot_retreat = 0.1
+        bot_retreat = 0.06
         shape = np.array([extend_x-bot_retreat, extend_y, width])
         pos = np.array([mid_x+bot_retreat/2, mid_y, bot_z])
         ori = [0,0,0,1]
@@ -137,7 +137,7 @@ class Workspace():
         self.ori = np.array([1.,0,0,0])
 
         # modify the workspace_low and high by using the padding
-        workspace_low = np.array([front_x,right_y,bot_z+width/2])
+        workspace_low = np.array([front_x+0.04,right_y,bot_z+width/2])
         workspace_high = np.array([back_x-0.05,left_y,top_z])
 
         padding = [0.07, 0.02]
@@ -151,7 +151,7 @@ class Workspace():
 
         self.region_low = np.array(workspace_low)# + np.array(base_pos)  # the bounding box of the valid regions in the workspace
         self.region_high = np.array(workspace_high)# + np.array(base_pos)
-        self.region_low[0] = self.region_low[0] + 0.1
+        self.region_low[0] = self.region_low[0] + 0.14
         self.region_low[1] = self.region_low[1] + padding[1]
         self.region_low[2] = self.region_low[2] + 0.02
         self.region_high[0] = self.region_high[0] - 0.07

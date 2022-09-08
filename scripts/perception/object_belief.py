@@ -99,7 +99,8 @@ class ObjectBelief():
     def update_sense_transform(self, sensed_transform):
         # given the sensed transform and current transform, update the x-y position by taking an average
         pos = self.transform[:2,3]
-        new_pos = (pos * self.sensed_times + sensed_transform[:2,3]) / (self.sensed_times+1)
+        # new_pos = (pos * self.sensed_times + sensed_transform[:2,3]) / (self.sensed_times+1)
+        new_pos = sensed_transform[:2,3]
         new_transform = np.array(self.transform)
         new_transform[:2,3] = new_pos
         self.update_transform(new_transform)

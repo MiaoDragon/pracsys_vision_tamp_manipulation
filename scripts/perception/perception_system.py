@@ -39,7 +39,7 @@ class PerceptionSystem():
     
 
     def detect_obj(self, obj: ObjectBelief):
-        if obj.color[0] > 200 and obj.color[1] < 120 and obj.color[2] < 120:
+        if obj.color[0] > 200 and obj.color[1] < 122:# and obj.color[2] < 125:
             return True
         else:
             return False
@@ -272,13 +272,13 @@ class PerceptionSystem():
             seg_rgb_img = cv2.cvtColor(seg_rgb_img.astype('float32'), cv2.COLOR_BGR2RGB)
             # cv2.imshow("segmentation", seg_rgb_img.astype('float32'))
         
-        visualize_assoc(seg_img)
+        # visualize_assoc(seg_img)
 
         # cv2.imshow('depth', depth_img)
 
-        cv2.waitKey(0)
+        # cv2.waitKey(0)
 
-        input('after visualizing segmentation...')
+        # input('after visualizing segmentation...')
 
 
         # obj_models: obj_id -> obj_model

@@ -376,7 +376,8 @@ class ExecutionInterface():
         #     pass
         # else:
         #     color = self.remove_brightness(color)
-        if color[0] > 200 and color[1] < 120 and color[2] < 120:
+
+        if color[0] > 200 and color[1] < 122:# and obj.color[2] < 125::
             p_name = 'T.' + p_name
             print('target found!')
 

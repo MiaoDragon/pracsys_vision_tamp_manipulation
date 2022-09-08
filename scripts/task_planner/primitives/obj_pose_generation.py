@@ -84,7 +84,7 @@ def generate_placements(obj, robot, execution, perception, workspace, display=Fa
     # get z coord for object placement
     z_mid = (maxs[2] + mins[2]) / 2.0
     # z = z_mid + ws_low[2] + 0.003
-    z = z_mid + 0.02
+    z = z_mid + 0.01
 
     # shape_type = p.getCollisionShapeData(obj_local_id, -1, robot.pybullet_id)[0][2]
     # generate kernel for collision mask

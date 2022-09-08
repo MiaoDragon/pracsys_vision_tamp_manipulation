@@ -27,7 +27,7 @@ class SegmentationROSServer:
             cylinder_i.mid_center.x = mid_center[0]
             cylinder_i.mid_center.y = mid_center[1]
             cylinder_i.mid_center.z = mid_center[2]
-            cylinder_i.radius = cylinder_models[i]['radius'] + 0.01
+            cylinder_i.radius = cylinder_models[i]['radius'] + 0.02
             cylinder_i.height = cylinder_models[i]['height'] + 0.02
             axis = cylinder_models[i]['axis']
             cylinder_i.axis.x = axis[0]

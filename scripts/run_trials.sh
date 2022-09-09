@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 roslaunch motoman_moveit_config move_group.launch > log_moveit.txt 2>&1 &
 
-trials=(4 4 4 6 6 6 8 8 8 10 10 10)
+trials=(4 4 4 6 6 6 8 8 8 10 10 10 12 12 12 14 14 14 16 16 16)
 t=1
 for num in "${trials[@]}"
 do

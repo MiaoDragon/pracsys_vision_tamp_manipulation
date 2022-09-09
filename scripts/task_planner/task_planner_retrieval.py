@@ -200,7 +200,7 @@ class TaskPlanner():
                     self.dep_graph.rerun()
                     new_sinks, new_probs = self.dep_graph.sinks()
                     # self.dep_graph.draw_graph()
-                    if len(new_sinks & sinks) > len(sinks):
+                    if len(set(new_sinks) | set(sinks)) > len(sinks):
                         sinks, probs = new_sinks, new_probs
                         failure = False
                         need_rerank = False
@@ -276,8 +276,10 @@ def main():
     # task_planner.run_pipeline()
 
     success, stats = task_planner.alg_pipeline()
+    stats.append({'action': 'retrieve', 'success': success})
     task_planner.save_stats(stats, prob_id + '_pipeline.json')
     # success, stats = task_planner.alg_random()
+    # stats.append({'action': 'retrieve', 'success':success})
     # task_planner.save_stats(stats, prob_id + '_random.json')
 
 

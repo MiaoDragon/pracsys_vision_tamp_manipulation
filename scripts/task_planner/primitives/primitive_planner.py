@@ -86,7 +86,7 @@ class PrimitivePlanner():
     ):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
-        time_info = {"success": False, "action": "MoveOrPlaceback"}
+        time_info = {"success": False, "action": "MoveOrPlaceback", "object": obj.obj_id}
         did_uncover = False
         total0 = time.time()
 
@@ -381,7 +381,7 @@ class PrimitivePlanner():
     def TryMoveOneObject(self, obj, pre_grasp_dist=0.02, pre_place_dist=0.08):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
-        time_info = {"success": False, "action": "TryMoveOneObject"}
+        time_info = {"success": False, "action": "TryMoveOneObject", "object": obj.obj_id}
         total0 = time.time()
 
         ## Generate Grasps ##
@@ -680,7 +680,7 @@ class PrimitivePlanner():
     def pick(self, obj, pre_grasp_dist=0.02):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
-        time_info = {"success": False, "action": "Retrieve"}
+        time_info = {"success": False, "action": "Retrieve", "object": obj.obj_id}
         total0 = time.time()
 
         ## Generate Grasps ##

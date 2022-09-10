@@ -125,7 +125,7 @@ class TaskPlanner():
     def run_pipeline(self, ):
         ### Grasp Sampling Test ###
         print("* Grasp Test *")
-        pose_ind = 'q'  # input("Please Enter Object Id: ")
+        pose_ind = input("Please Enter Object Id: ")
         while pose_ind != 'q':
             try:
                 obj_id = int(pose_ind)
@@ -164,7 +164,7 @@ class TaskPlanner():
             # self.dep_graph.draw_graph()
         ### Pick Test End ###
 
-    def alg_pipeline(self, timeout=60 * 60):
+    def alg_pipeline(self, timeout=20 * 60):
         TryMoveOne = self.planner.TryMoveOne
         MoveOrPlaceback = self.planner.MoveOrPlaceback
         Retrieve = self.planner.pick
@@ -172,16 +172,12 @@ class TaskPlanner():
         time_infos = []
 
         t0 = time.time()
+        num_seen = len(self.perception.objects)
         failure = False
-        need_rerank = True
-        # while failure == False:
-        while time.time() - t0 < timeout and not failure:
-            failure = True
-            if need_rerank:
-                self.dep_graph.rerun()
-                # self.dep_graph.draw_graph()
-                sinks, probs = self.dep_graph.sinks()
-            need_rerank = True
+        while not failure:
+            self.dep_graph.rerun()
+            # self.dep_graph.draw_graph()
+            sinks, probs = self.dep_graph.sinks()
             target = self.dep_graph.target_pid
             print("target?", target, sinks, probs)
             if target in sinks:
@@ -191,41 +187,42 @@ class TaskPlanner():
             success, info = TryMoveOne(sinks, probs)
             time_infos += info
             if not success:
+                failure = True
                 for sink in sinks:
+                    num_seen = len(self.perception.objects)
                     obj = self.perception.objects[sink]
                     success, info = MoveOrPlaceback(obj)
                     time_infos.append(info)
                     if not success:
                         continue
-                    self.dep_graph.rerun()
-                    new_sinks, new_probs = self.dep_graph.sinks()
+                    # self.dep_graph.rerun()
+                    # new_sinks, new_probs = self.dep_graph.sinks()
                     # self.dep_graph.draw_graph()
-                    if len(set(new_sinks) | set(sinks)) > len(sinks):
-                        sinks, probs = new_sinks, new_probs
-                        failure = False
-                        need_rerank = False
+                    if len(self.perception.objects) > num_seen:
+                        failure = time.time() - t0 > timeout
                         break
-                    ind_ignore = sinks.index(sink)
-                    success, info = TryMoveOne(
-                        [s for i, s in enumerate(sinks) if i != ind_ignore],
-                        [p for i, p in enumerate(probs) if i != ind_ignore]
-                    )
+                    # ind_ignore = sinks.index(sink)
+                    # success, info = TryMoveOne(
+                    #     [s for i, s in enumerate(sinks) if i != ind_ignore],
+                    #     [p for i, p in enumerate(probs) if i != ind_ignore]
+                    # )
+                    success, info = TryMoveOne(sinks, probs)
                     time_infos += info
                     if not success:
                         continue
-                    failure = False
+                    failure = time.time() - t0 > timeout
                     break
-            else:
-                failure = False
 
         if failure:
+            time_infos.append({'timed_out': time.time() - t0 > timeout, 'success': False})
             return False, time_infos
         else:
             obj = self.perception.objects[target]
             Retrieve(obj)
+            time_infos.append({'timed_out': time.time() - t0 > timeout, 'success': True})
             return True, time_infos
 
-    def alg_random(self, timeout=60 * 60):
+    def alg_random(self, timeout=20 * 60):
         MoveOrPlaceback = self.planner.MoveOrPlaceback
         Retrieve = self.planner.pick
 
@@ -255,10 +252,12 @@ class TaskPlanner():
             time_infos.append(info)
 
         if failure:
+            time_infos.append({'timed_out': True, 'success': False})
             return False, time_infos
         else:
             obj = self.perception.objects[target]
             Retrieve(obj)
+            time_infos.append({'timed_out': False, 'success': True})
             return True, time_infos
 
     def save_stats(self, time_infos, fname):
@@ -276,10 +275,8 @@ def main():
     # task_planner.run_pipeline()
 
     success, stats = task_planner.alg_pipeline()
-    stats.append({'action': 'retrieve', 'success': success})
     task_planner.save_stats(stats, prob_id + '_pipeline.json')
     # success, stats = task_planner.alg_random()
-    # stats.append({'action': 'retrieve', 'success':success})
     # task_planner.save_stats(stats, prob_id + '_random.json')
 
 

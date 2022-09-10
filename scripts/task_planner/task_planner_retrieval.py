@@ -180,6 +180,9 @@ class TaskPlanner():
             sinks, probs = self.dep_graph.sinks()
             target = self.dep_graph.target_pid
             print("target?", target, sinks, probs)
+            if len(sinks) == 0:
+                failure = True
+                break
             if target in sinks:
                 # self.dep_graph.draw_graph()
                 failure = False

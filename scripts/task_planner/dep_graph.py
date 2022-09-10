@@ -44,13 +44,13 @@ class DepGraph():
     def first_run(self):
         self.gen_graph()
         self.select_target()
-        self.gen_grasps()
         self.update_belief()
+        self.gen_grasps()
 
     def rerun(self):
         self.gen_graph()
-        self.gen_grasps()
         self.update_belief()
+        self.gen_grasps()
 
     def select_target(self):
         if self.gt_graph is None:
@@ -165,6 +165,9 @@ class DepGraph():
             total = 0
             for poseInfo in grasp_poses:
                 for obj_col_id in poseInfo['collisions']:
+                    # ignore self collision (why does this happen? bad ik?)
+                    if obj_col_id == obj_local_id:
+                        continue
                     # ignore hidden object collisions
                     if obj_col_id not in self.graph.nodes:
                         continue
@@ -199,8 +202,8 @@ class DepGraph():
                 continue
 
             weight = self.heuristic_volume(v, n)
-            if weight == 0:
-                continue
+            # if weight == 0:
+            #     continue
             total += weight
             self.graph.add_edge(self.temp_target_id, v, etype="hidden by", w=weight)
 

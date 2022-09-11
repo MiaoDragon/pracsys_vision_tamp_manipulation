@@ -58,13 +58,14 @@ class PrimitivePlanner():
         self.num_collision = 0
 
         self.intermediate_joint_dict = self.execution.scene.robot.joint_vals_to_dict(
-            (
-                0.014463338682204323, -4.0716884372437e-05, -0.00056967948338301,
-                -3.003771794272945e-05, -0.001129114022435695, -1.1408804411786207e-05,
-                0.0004592057758004012, 3.0809339998184584e-05, -0.18604427248646432,
-                0.9614386497656244, -0.10507968438009953, -1.702685750483462,
-                -0.017805293683614262, -0.5223902790606496, 3.461813038728145e-05
-            )
+            [0] * 15
+            # (
+            #     0.014463338682204323, -4.0716884372437e-05, -0.00056967948338301,
+            #     -3.003771794272945e-05, -0.001129114022435695, -1.1408804411786207e-05,
+            #     0.0004592057758004012, 3.0809339998184584e-05, -0.18604427248646432,
+            #     0.9614386497656244, -0.10507968438009953, -1.702685750483462,
+            #     -0.017805293683614262, -0.5223902790606496, 3.461813038728145e-05
+            # )
         )
 
     def TryMoveOne(self, sinks, probs, pre_grasp_dist=0.02, pre_place_dist=0.08):
@@ -342,6 +343,7 @@ class PrimitivePlanner():
                 add2dict(time_info, 'total_place', tpl1 - tpl0)
                 print("Total Place Time: ", time_info['total_place'])
 
+                time_info['placement'] = sample_pos
                 ## Execute Place ##
                 print(f"Succeded to plan move for Object {obj.obj_id}!")
                 t0 = time.time()
@@ -357,6 +359,9 @@ class PrimitivePlanner():
                 print("Total time: ", time_info['total'])
                 return True, time_info
 
+            time_info['placement'] = p.getBasePositionAndOrientation(
+                obj_local_id, robot.pybullet_id
+            )[0]
             ## Execute Reverse Pick ##
             print(f"Failed to plan place for {obj.obj_id}! Putting it back...")
             t0 = time.time()
@@ -608,6 +613,7 @@ class PrimitivePlanner():
                 add2dict(time_info, 'total_place', tpl1 - tpl0)
                 print("Total Place Time: ", time_info['total_place'])
 
+                time_info['placement'] = sample_pos
                 ## Execute ##
                 print(f"Succeded to plan move for Object {obj.obj_id}!")
                 t0 = time.time()

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-roslaunch motoman_moveit_config move_group.launch > log_moveit.txt 2>&1 &
+roslaunch motoman_moveit_config move_group.launch > moveit_log.txt 2>&1 &
 
 trials=( \
 	6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 \
@@ -25,6 +25,8 @@ do
 	fi
 	python task_planner_retrieval.py $TRIAL > log_plan.txt 2>&1
 	echo "Finished $TRIAL"
+	mkdir -p $TRIAL
+	mv log* $TRIAL
 	pkill -9 -f sim_scene
 	t=$((t+1))
 done

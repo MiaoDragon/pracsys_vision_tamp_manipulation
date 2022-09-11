@@ -177,7 +177,7 @@ class TaskPlanner():
         while not failure:
             self.dep_graph.rerun()
             # self.dep_graph.draw_graph()
-            sinks, probs = self.dep_graph.sinks()
+            sinks, probs = self.dep_graph.sinks(lambda x: x**3 + 0.001)
             target = self.dep_graph.target_pid
             print("target?", target, sinks, probs)
             if len(sinks) == 0:

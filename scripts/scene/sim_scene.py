@@ -9,8 +9,8 @@ import pybullet as p
 import rospkg
 import os
 
-# PYBULLET_MODE = p.DIRECT
-PYBULLET_MODE = p.GUI
+PYBULLET_MODE = p.DIRECT
+# PYBULLET_MODE = p.GUI
 
 class SimScene():
 

@@ -177,7 +177,8 @@ class TaskPlanner():
         while not failure:
             self.dep_graph.rerun()
             # self.dep_graph.draw_graph()
-            sinks, probs = self.dep_graph.sinks(lambda x: x**3 + 0.001)
+            # sinks, probs = self.dep_graph.sinks(lambda x: x + 0.001)
+            sinks, probs = self.dep_graph.sinks(lambda x: x*0+1)
             target = self.dep_graph.target_pid
             print("target?", target, sinks, probs)
             if len(sinks) == 0:
@@ -234,23 +235,20 @@ class TaskPlanner():
         t0 = time.time()
         failure = True
         while time.time() - t0 < timeout:
-            self.dep_graph.gen_graph()
-            self.dep_graph.gen_grasps()
-            sinks = []
-            for v, n in list(self.dep_graph.graph.nodes(data="dname")):
-                # only look at sink nodes
-                if self.dep_graph.graph.out_degree(v) > 0:
-                    continue
-                if v == self.dep_graph.target_id:
-                    sinks.append(self.dep_graph.target_pid)
-                else:
-                    sinks.append(int(n))
+            self.dep_graph.rerun()
+            sinks, probs = self.dep_graph.sinks(lambda x: x*0+1)
             target = self.dep_graph.target_pid
+            print("target?", target, sinks, probs)
+            if len(sinks) == 0:
+                failure = True
+                break
             if target in sinks:
                 failure = False
                 break
             sink = np.random.choice(sinks)
+            print(sink)
             obj = self.perception.objects[sink]
+            print(obj)
             success, info = MoveOrPlaceback(obj)
             time_infos.append(info)
 
@@ -278,7 +276,8 @@ def main():
     # task_planner.run_pipeline()
 
     success, stats = task_planner.alg_pipeline()
-    task_planner.save_stats(stats, prob_id + '_pipeline.json')
+    # task_planner.save_stats(stats, prob_id + '_pipeline.json')
+    task_planner.save_stats(stats, prob_id + '_uniform.json')
     # success, stats = task_planner.alg_random()
     # task_planner.save_stats(stats, prob_id + '_random.json')
 

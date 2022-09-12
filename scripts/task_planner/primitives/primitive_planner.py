@@ -810,6 +810,11 @@ class PrimitivePlanner():
         # self.motion_planner.scene_interface.remove_world_object("TEMP_ATTACHED")
 
     def set_collision_env_with_models(self, obj_id):
+        ## cheat for now ##
+        self.motion_planner.set_collision_env_with_models(
+            self.execution.object_state_msg.values()
+        )
+        return
         ## Set Collision Space ##
         obs_msgs = []
         # for obs_id in self.execution.object_state_msg.keys():

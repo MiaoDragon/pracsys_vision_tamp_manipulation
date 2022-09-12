@@ -31,8 +31,8 @@ import transformations as tf
 
 from utils.visual_utils import *
 
-# PYBULLET_MODE = p.DIRECT
-PYBULLET_MODE = p.GUI
+PYBULLET_MODE = p.DIRECT
+# PYBULLET_MODE = p.GUI
 
 
 def random_stacked_problem(scene, level, num_objs, num_hiding_objs):

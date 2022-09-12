@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
 roslaunch motoman_moveit_config move_group.launch > moveit_log.txt 2>&1 &
 
-num=6
-t=1
+trials=( 0 \
+	6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 \
+	8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 \
+	10 10 10 10 10 10 10 10 10 10 \
+	10 10 10 10 10 10 10 10 10 10 \
+	12 12 12 12 12 12 12 12 12 12 \
+	12 12 12 12 12 12 12 12 12 12 \
+	14 14 14 14 14 14 14 14 14 14 \
+	14 14 14 14 14 14 14 14 14 14 \
+)
+t=28
+num=${trials[$t]}
 TRIAL=trial_$t
 if [ -f $TRIAL.pkl ]
 then

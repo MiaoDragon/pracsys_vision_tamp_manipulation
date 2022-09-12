@@ -71,15 +71,15 @@ class ObjectBelief():
         self.sensed = 0
         # sensed means if the object has been completely reconstructed
 
-        self.transform = np.zeros((4,4))
-        self.transform[:3,0] = self.axis_x
-        self.transform[:3,1] = self.axis_y
-        self.transform[:3,2] = self.axis_z
-        self.transform[:3,3] = np.array([self.origin_x, self.origin_y, self.origin_z])
-        self.transform[3,3] = 1.
+        self.voxel_transform = np.zeros((4,4))
+        self.voxel_transform[:3,0] = self.axis_x
+        self.voxel_transform[:3,1] = self.axis_y
+        self.voxel_transform[:3,2] = self.axis_z
+        self.voxel_transform[:3,3] = np.array([self.origin_x, self.origin_y, self.origin_z])
+        self.voxel_transform[3,3] = 1.
 
         # self.transform = transform  # the transform of the voxel grid cooridnate system in the world as {world}T{voxel}
-        self.world_in_voxel = np.linalg.inv(self.transform)
+        self.world_in_voxel = np.linalg.inv(self.voxel_transform)
         self.world_in_voxel_rot = self.world_in_voxel[:3,:3]
         self.world_in_voxel_tran = self.world_in_voxel[:3,3]
 
@@ -125,8 +125,10 @@ class ObjectBelief():
         self.sensed = 1
 
     def update_transform(self, transform):
+        del_transform = transform.dot(np.linalg.inv(self.transform))
         self.transform = transform
-        self.world_in_voxel = np.linalg.inv(self.transform)
+        self.voxel_transform = del_transform.dot(self.voxel_transform)
+        self.world_in_voxel = np.linalg.inv(self.voxel_transform)
         self.world_in_voxel_rot = self.world_in_voxel[:3,:3]
         self.world_in_voxel_tran = self.world_in_voxel[:3,3]
 

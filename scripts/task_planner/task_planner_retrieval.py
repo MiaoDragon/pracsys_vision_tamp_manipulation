@@ -136,15 +136,17 @@ class TaskPlanner():
                     if not success:
                         continue
                     failure = False
+                    print('failed... breaking')
                     break
             # update the scene
             self.planner.reset()
             self.pipeline_sim()
 
             self.dep_graph.rerun()
-            self.dep_graph.draw_graph()
+            # self.dep_graph.draw_graph()
 
         if failure:
+            print('failure...')
             return False
         else:
             print('target object found!')

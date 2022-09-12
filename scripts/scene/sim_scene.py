@@ -46,8 +46,8 @@ def plane_intersect(a, b):
 
 class SimScene():
     def __init__(self, scene_dict):
-        # pid = p.connect(p.DIRECT)
-        pid = p.connect(p.GUI)
+        pid = p.connect(p.DIRECT)
+        # pid = p.connect(p.GUI)
 
         listener = tf.TransformListener()
 

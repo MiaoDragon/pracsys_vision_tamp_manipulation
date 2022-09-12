@@ -118,6 +118,7 @@ def generate_placements(obj, robot, execution, perception, workspace, display=Fa
     )
     if display:
         cv2.destroyAllWindows()
+    
     return samples
 
 

@@ -110,7 +110,7 @@ class PerceptionSystem():
 
 
         vis_occ = visualize_voxel(self.occlusion.voxel_x, self.occlusion.voxel_y, self.occlusion.voxel_z, occluded, [1,0,0])
-        o3d.visualization.draw_geometries([vis_occ]+v_pcds)
+        # o3d.visualization.draw_geometries([vis_occ]+v_pcds)
 
 
 
@@ -150,7 +150,7 @@ class PerceptionSystem():
             color = from_color_map(i, 16)
             vis_voxel = visualize_voxel(self.occlusion.voxel_x, self.occlusion.voxel_y, self.occlusion.voxel_z, filtered_occluded_dict[i], color)
             voxels.append(vis_voxel)
-        o3d.visualization.draw_geometries(voxels)
+        # o3d.visualization.draw_geometries(voxels)
 
 
 

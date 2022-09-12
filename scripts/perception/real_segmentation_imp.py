@@ -618,7 +618,7 @@ class CylinderSegmentation():
         vis_pcd = o3d.geometry.PointCloud()
         vis_pcd.points = o3d.utility.Vector3dVector(point_cloud)
         vis_pcd.colors = o3d.utility.Vector3dVector(pcd_color)
-        o3d.visualization.draw_geometries([vis_pcd] + cylinders)
+        # o3d.visualization.draw_geometries([vis_pcd] + cylinders)
 
         # * extract the point cloud corresponding to cylinders
         point_cloud, pcd_color = self.crop_pcd(total_mask, point_cloud, pcd_color)

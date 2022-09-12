@@ -258,7 +258,7 @@ class DepGraph():
         return sinks, probs
 
 
-    def heuristic_volume(self, v, n, visualize=True):
+    def heuristic_volume(self, v, n, visualize=False):
         '''
         v <- node id
         n <- node name

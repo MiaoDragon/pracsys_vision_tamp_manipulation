@@ -249,6 +249,7 @@ class MotionPlanner():
             for j in range(len(joint_names)):
                 joint_dict[joint_names[j]] = joint_vals[i][j]
             joint_dict_list.append(joint_dict)
+        print('len(joint_dict_list): ', len(joint_dict_list))
         return joint_dict_list
 
     def motion_plan_poses(self, start_joint_dict, target_poses, attached_acos=[]):
@@ -325,7 +326,7 @@ class MotionPlanner():
             start_joint_dict, plan_dict_list2[0], attached_acos=attached_acos
         )
 
-        if not plan_dict_list1:
+        if len(plan_dict_list1) == 0:
             return []
 
         return plan_dict_list1 + plan_dict_list2

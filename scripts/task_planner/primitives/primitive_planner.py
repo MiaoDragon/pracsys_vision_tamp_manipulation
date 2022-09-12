@@ -69,7 +69,7 @@ class PrimitivePlanner():
 
     def TryMoveOne(self, sinks, probs, pre_grasp_dist=0.02, pre_place_dist=0.08):
         time_infos = []
-        for obj_id in np.random.choice(sinks, len(sinks), replace=False, p=probs):
+        for obj_id in np.random.choice(sinks, len(sinks), replace=False, p=np.array(probs)/np.sum(probs)):
             obj = self.perception.objects[obj_id]
             success, info = self.TryMoveOneObject(obj, pre_grasp_dist, pre_place_dist)
             time_infos.append(info)
@@ -113,7 +113,7 @@ class PrimitivePlanner():
 
             ## Set Collision Space ##
             self.set_collision_env_with_models(obj.obj_id)
-            input('after setting collision...')
+            # input('after setting collision...')
             tpk0 = time.time()
             ## Plan Pick ##
             t0 = time.time()
@@ -446,6 +446,8 @@ class PrimitivePlanner():
         print("Grasp Generation Time: ", time_info['grasps_gen'])
 
         ## Generate Placements ##
+        print('before generating grasp...')
+
         placements = obj_pose_generation.generate_placements(
             obj,
             robot,
@@ -454,6 +456,8 @@ class PrimitivePlanner():
             self.scene.workspace,
             # display=True,
         )
+        print('after generating grasp...')
+
 
         # planning for each grasp until success
         for poseInfo in filteredPoses:
@@ -510,7 +514,7 @@ class PrimitivePlanner():
             shuffle(placements)
 
 
-            input('after picking pose...')
+            # input('after picking pose...')
             # * remove object from the scene before attaching it later during placement plan
             self.motion_planner.scene_interface.remove_world_object(str(obj.pybullet_id))                
 
@@ -588,11 +592,11 @@ class PrimitivePlanner():
                 )
                 # self.detach_known(obj)
 
-                if not place_joint_dict_list:
+                if len(place_joint_dict_list) == 0:
                     print('place planning failed...')
                     continue
                 break
-            input('after placing pose...')
+            # input('after placing pose...')
 
             if len(place_joint_dict) > 0:
                 # plan is done
@@ -667,7 +671,7 @@ class PrimitivePlanner():
             joint_dict,
             self.execution.scene.robot.init_joint_dict
         )
-        input('before reset...')
+        # input('before reset...')
         if len(plan_reset) == 0:
             return False
         self.execution.execute_traj(plan_reset)
@@ -932,4 +936,4 @@ class PrimitivePlanner():
                 v_color[:, 1] = 0
                 v_color[:, 2] = 0
                 v_pcds.append(visualize_pcd(v_pcd, v_color))
-            o3d.visualization.draw_geometries(v_pcds)
+            # o3d.visualization.draw_geometries(v_pcds)

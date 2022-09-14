@@ -302,7 +302,7 @@ class PrimitivePlanner():
                     add2dict(time_info, 'total_place', tpl1 - tpl0)
                     continue
 
-                self.set_collision_env_with_models(obj.obj_id)
+                # self.set_collision_env_with_models(obj.obj_id)
                 ## Plan Place ##
                 t0 = time.time()
                 place_joint_dict = robot.joint_vals_to_dict(jointPoses)

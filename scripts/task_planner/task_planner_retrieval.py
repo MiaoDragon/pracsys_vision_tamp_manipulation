@@ -177,8 +177,8 @@ class TaskPlanner():
         while not failure:
             self.dep_graph.rerun()
             # self.dep_graph.draw_graph()
-            # sinks, probs = self.dep_graph.sinks(lambda x: x + 0.001)
-            sinks, probs = self.dep_graph.sinks(lambda x: x*0+1)
+            sinks, probs = self.dep_graph.sinks(lambda x: x + 0.001)
+            # sinks, probs = self.dep_graph.sinks(lambda x: x * 0 + 1)
             target = self.dep_graph.target_pid
             print("target?", target, sinks, probs)
             if len(sinks) == 0:
@@ -236,7 +236,7 @@ class TaskPlanner():
         failure = True
         while time.time() - t0 < timeout:
             self.dep_graph.rerun()
-            sinks, probs = self.dep_graph.sinks(lambda x: x*0+1)
+            sinks, probs = self.dep_graph.sinks(lambda x: x * 0 + 1)
             target = self.dep_graph.target_pid
             print("target?", target, sinks, probs)
             if len(sinks) == 0:
@@ -276,8 +276,8 @@ def main():
     # task_planner.run_pipeline()
 
     success, stats = task_planner.alg_pipeline()
-    # task_planner.save_stats(stats, prob_id + '_pipeline.json')
-    task_planner.save_stats(stats, prob_id + '_uniform.json')
+    task_planner.save_stats(stats, prob_id + '_pipeline.json')
+    # task_planner.save_stats(stats, prob_id + '_uniform.json')
     # success, stats = task_planner.alg_random()
     # task_planner.save_stats(stats, prob_id + '_random.json')
 

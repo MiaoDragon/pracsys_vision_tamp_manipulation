@@ -11,7 +11,7 @@ trials=( 0 \
 	14 14 14 14 14 14 14 14 14 14 \
 	14 14 14 14 14 14 14 14 14 14 \
 )
-for t in 1 #49 64 97 99
+for t in 1
 do
 	num=${trials[$t]}
 	TRIAL=trial_$t

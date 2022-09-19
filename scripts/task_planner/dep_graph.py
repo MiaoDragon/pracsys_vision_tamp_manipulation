@@ -7,12 +7,15 @@ from random import choice
 
 import numpy as np
 import networkx as nx
-from matplotlib.pyplot import show
+import matplotlib.image as img
+import matplotlib.pyplot as plt
+from matplotlib.colors import rgb2hex
 
 import cv2
 import pybullet as p
 import open3d as o3d
 
+from utils.visual_utils import *
 from utils.transform_utils import *
 from primitives import obj_pose_generation
 
@@ -295,39 +298,52 @@ class DepGraph():
         probs = probs / sum(probs)  # re-normalize
         return sinks, probs
 
-    def draw_graph(self, ground_truth=False, label="dname"):
+    def draw_graph(self, ground_truth=False, label="dname", suffix="", path=None):
         if ground_truth:
             graph = self.gt_graph
         else:
             graph = self.graph
 
-        pos = nx.nx_pydot.graphviz_layout(
+        local2real = {v: int(k) for k, v in self.execution.object_local_id_dict.items()}
+        offset = min(local2real.values())
+        num_objects = len(local2real)
+        print(local2real)
+        print(num_objects)
+        print(offset)
+
+        for v, n in list(self.graph.nodes(data="dname")):
+            if v in local2real:
+                color = from_color_map(local2real[v] - offset, num_objects)
+            else:
+                color = from_color_map(local2real[self.target_id] - offset, num_objects)
+            graph.nodes[v].update(
+                {
+                    'shape': 'circle',
+                    'fixedsize': True,
+                    'width': 0.34,
+                    'color': 'black',
+                    'fillcolor': rgb2hex(color),
+                    'style': "filled,solid",
+                    'fontsize': 22,
+                    'label': n[0] if n[0] == 'T' else n
+                }
+            )
+        for i, j in list(graph.edges()):
+            e = (i, j)
+            etype = graph.edges[e]['etype']
+            w = graph.edges[e]['w']
+            graph.edges[e].update({'label': f"{etype}\n{np.round(100*w):g}%"})
+        graph.graph['rankdir'] = 'BT'
+
+        path, agraph = nx.nx_agraph.view_pygraphviz(
             graph,
-            # 'fdp',
-            # k=1 / len(graph.nodes),
-            # pos=pos,
-            # fixed=[v for v, d in graph.out_degree if v > 0 and d == 0],
-            # iterations=100
+            prog='dot',
+            # prog='circo',
+            show=False,
+            suffix=suffix,
+            path=path,
         )
-        # colors = [
-        #     color if color is not None else [1.0, 1.0, 1.0, 1.0]
-        #     for color in dict(graph.nodes(data="color")).values()
-        # ]
-        nx.draw(graph, pos)  # , node_color=colors)
-        nx.draw_networkx_labels(graph, pos, dict(graph.nodes(data=label)))
-        nx.draw_networkx_edge_labels(
-            graph,
-            pos,
-            {(i, j): t
-             for i, j, t in graph.edges(data="etype")},
-        )
-        nx.draw_networkx_edge_labels(
-            graph,
-            {k: (v[0], v[1] - 10)
-             for k, v in pos.items()},
-            {
-                (i, j): "" if w is None else np.round(w, 4)
-                for i, j, w in graph.edges(data="w")
-            },
-        )
-        show()
+        image = img.imread(path)
+        plt.imshow(image)
+        print("*** IMAGE PATH:", path, "***")
+        plt.show()

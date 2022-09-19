@@ -31,8 +31,8 @@ import transformations as tf
 
 from utils.visual_utils import *
 
-PYBULLET_MODE = p.DIRECT
-# PYBULLET_MODE = p.GUI
+# PYBULLET_MODE = p.DIRECT
+PYBULLET_MODE = p.GUI
 
 
 def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
@@ -429,10 +429,11 @@ def random_one_problem(scene, level, num_objs, num_hiding_objs, safety_padding=0
 
                 x_low_offset = 0
 
-            if i == 0:
-                color = [1.0, 0., 0., 1]
-            else:
-                color = [1, 1, 1, 1]
+            # if i == 0:
+            #     color = [1.0, 0., 0., 1]
+            # else:
+            #     color = [1, 1, 1, 1]
+            color = [*from_color_map(i, num_objs), 1]
             if obj_shape == 'cube':
                 while True:
                     x_size = x_scales[np.random.choice(len(x_scales))]
@@ -648,6 +649,7 @@ def load_problem(
     scene, obj_poses, obj_pcds, obj_shapes, obj_sizes, target_pose, target_pcd,
     target_obj_shape, target_obj_size
 ):
+    num_objs = len(obj_poses)
 
     # load scene definition file
     pid = p.connect(PYBULLET_MODE)
@@ -710,10 +712,11 @@ def load_problem(
         # randomly pick one object shape
         obj_shape = obj_shapes[i]
         # randomly scale the object
-        if i == 0:
-            color = [1.0, 0., 0., 1]
-        else:
-            color = [1, 1, 1, 1]
+        # if i == 0:
+        #     color = [1.0, 0., 0., 1]
+        # else:
+        #     color = [1, 1, 1, 1]
+        color = [*from_color_map(i, num_objs), 1]
         x_size, y_size, z_size = obj_sizes[i]
         x, y, z = obj_poses[i][:3, 3]
         if obj_shape != 'cylinder':
@@ -935,7 +938,8 @@ def random_one_problem_level(
         while True:
             obj_shape = random.choice(obj_list)
 
-            color = [1, 1, 1, 1]
+            # color = [1, 1, 1, 1]
+            color = [*from_color_map(i, num_objs), 1]
 
             if obj_shape == 'cube':
                 x_size = obj_sizes[i][0]
@@ -1149,6 +1153,7 @@ def load_problem_level(
     scene, obj_poses, obj_pcds, obj_shapes, obj_sizes, target_pose, target_pcd,
     target_obj_shape, target_obj_size
 ):
+    num_objs = len(obj_poses)
 
     # load scene definition file
     pid = p.connect(PYBULLET_MODE)
@@ -1215,11 +1220,12 @@ def load_problem_level(
         # randomly pick one object shape
         obj_shape = obj_shapes[i]
         # randomly scale the object
-        if i == 0:
-            # color = [1.0,0.,0.,1]
-            color = [1, 1, 1, 1]
-        else:
-            color = [1, 1, 1, 1]
+        # if i == 0:
+        #     # color = [1.0,0.,0.,1]
+        #     color = [1, 1, 1, 1]
+        # else:
+        #     color = [1, 1, 1, 1]
+        color = [*from_color_map(i, num_objs), 1]
         x_size, y_size, z_size = obj_sizes[i]
 
         # if np.round(z_size, 2) == 0.06:
@@ -1458,10 +1464,11 @@ def random_one_problem_ycb(scene, level, num_objs, num_hiding_objs, safety_paddi
         print(obj_name_list)
         for i in range(num_objs):
             # randomly pick one object shape
-            if i == 0:
-                color = [1.0, 0., 0., 1]
-            else:
-                color = [1, 1, 1, 1]
+            # if i == 0:
+            #     color = [1.0, 0., 0., 1]
+            # else:
+            #     color = [1, 1, 1, 1]
+            color = [*from_color_map(i, num_objs), 1]
             while True:
                 obj_shape_i = np.random.choice(len(obj_name_list))
 
@@ -1649,7 +1656,7 @@ def random_one_problem_ycb(scene, level, num_objs, num_hiding_objs, safety_paddi
 
 
 def load_problem_ycb(scene, obj_poses, obj_shapes, target_pose, target_obj_shape):
-
+    num_objs = len(obj_poses)
     # load scene definition file
     pid = p.connect(PYBULLET_MODE)
 
@@ -1714,10 +1721,11 @@ def load_problem_ycb(scene, obj_poses, obj_shapes, target_pose, target_obj_shape
         obj_shape = obj_shapes[i]
         print('obj shape: ', obj_shape)
         # randomly scale the object
-        if i == 0:
-            color = [1.0, 0., 0., 1]
-        else:
-            color = [1, 1, 1, 1]
+        # if i == 0:
+        #     color = [1.0, 0., 0., 1]
+        # else:
+        #     color = [1, 1, 1, 1]
+        color = [*from_color_map(i, num_objs), 1]
         x, y, z = obj_poses[i][:3, 3]
         if obj_shape == 'cracker_box':
             ori = [0, 0.7071068, 0, 0.7071068]

@@ -192,7 +192,7 @@ class PrimitivePlanner():
             self.pipeline_sim()
             t1 = time.time()
             time_info['perception'] = t1 - t0
-            print("** Perception Done! (", time_info['perception'][-1], ") **")
+            print("** Perception Done! (", time_info['perception'], ") **")
             print("Occluded After:", self.perception.filtered_occluded.sum())
             volume = self.perception.filtered_occluded.sum()
             print("Change:", volume - prev_volume)
@@ -634,7 +634,7 @@ class PrimitivePlanner():
                     self.pipeline_sim()
                     t1 = time.time()
                     time_info['perception'] = t1 - t0
-                    print("** Perception Done! (", time_info['perception'][-1], ") **")
+                    print("** Perception Done! (", time_info['perception'], ") **")
 
                 self.execution.execute_traj(place_joint_dict_list)
                 self.execution.detach_obj()

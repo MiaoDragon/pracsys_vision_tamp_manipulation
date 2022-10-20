@@ -70,7 +70,12 @@ def get_object_mask(
     return kernel
 
 
-def generate_placements(obj, robot, execution, perception, workspace, display=False):
+def generate_placements(
+    obj, robot, execution, perception, workspace, display=False, a_res=12
+):
+    """
+    - a_res (angular resolution) should be an even number
+    """
     obj_local_id = execution.object_local_id_dict[str(obj.pybullet_id)]
     resol = perception.occlusion.resol
     # occlusion_label, occupied_label = perception.occlusion_label_t, perception.occupied_label_t
@@ -85,39 +90,52 @@ def generate_placements(obj, robot, execution, perception, workspace, display=Fa
     z_mid = (maxs[2] - mins[2]) / 2.0
     z = z_mid + ws_low[2] + 0.003
 
-    # shape_type = p.getCollisionShapeData(obj_local_id, -1, robot.pybullet_id)[0][2]
-    # generate kernel for collision mask
-    kernel = get_object_mask(obj, robot, execution, perception)
-    print(f"{obj.obj_id}:")
-    print(kernel[:, :])
+    shape_type = p.getCollisionShapeData(obj_local_id, -1, robot.pybullet_id)[0][2]
+    if shape_type not in (p.GEOM_CYLINDER, p.GEOM_CAPSULE):
+        angles = np.linspace(-np.pi, np.pi, a_res + 1)[:-1]
+    else:
+        angles = [0]
+    print("angles:", angles)
+    all_samples = []
+    for angle in angles:
+        degs = angle * 180 / np.pi
+        # generate kernel for collision mask
+        kernel = get_object_mask(obj, robot, execution, perception, degs)
+        print(f"{obj.obj_id}:")
+        print(kernel[:, :])
 
-    # free_x, free_y = np.where(((occlusion_label <= 0) & (occupied_label == 0)).all(2))
-    free_x, free_y = np.where((occlusion_label <= 0).all(2))
-    shape = perception.occlusion.occlusion.shape
-    img = 255 * np.ones(shape[0:2]).astype('uint8')
-    img[free_x, free_y] = 0
-    img[0, :] = 255
-    img[-1, :] = 255
-    img[:, 0] = 255
-    img[:, -1] = 255
-    if display:
-        cv2.imshow("Test0", img)
-        cv2.waitKey(0)
-    fimg = cv2.filter2D(img, -1, kernel)
-    if display:
-        cv2.imshow("Test1", fimg)
-        cv2.waitKey(0)
-    mink_x, mink_y = np.where(fimg == 0)
-    samples = list(
-        zip(
-            mink_x * resol[0] + ws_low[0],
-            mink_y * resol[1] + ws_low[1],
-            [z] * len(mink_x),
+        # free_x, free_y = np.where(((occlusion_label <= 0) & (occupied_label == 0)).all(2))
+        free_x, free_y = np.where((occlusion_label <= 0).all(2))
+        shape = perception.occlusion.occlusion.shape
+        img = 255 * np.ones(shape[0:2]).astype('uint8')
+        img[free_x, free_y] = 0
+        img[0, :] = 255
+        img[-1, :] = 255
+        img[:, 0] = 255
+        img[:, -1] = 255
+        if display:
+            cv2.imshow("Test0", img)
+            cv2.waitKey(0)
+        fimg = cv2.filter2D(img, -1, kernel)
+        if display:
+            cv2.imshow("Test1", fimg)
+            cv2.waitKey(0)
+        mink_x, mink_y = np.where(fimg == 0)
+        samples = list(
+            zip(
+                zip(
+                    mink_x * resol[0] + ws_low[0],
+                    mink_y * resol[1] + ws_low[1],
+                    [z] * len(mink_x),
+                ),
+                [p.getQuaternionFromEuler((0, 0, angle))] * len(mink_x),
+            )
         )
-    )
-    if display:
-        cv2.destroyAllWindows()
-    return samples
+        # print("samples:", samples)
+        if display:
+            cv2.destroyAllWindows()
+        all_samples += samples
+    return all_samples
 
 
 def generate_random_placement(

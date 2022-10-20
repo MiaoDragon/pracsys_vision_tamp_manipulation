@@ -248,13 +248,14 @@ class PrimitivePlanner():
             obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
             obj2gripper = np.linalg.inv(obj_rel_transform)
             shuffle(placements)
-            for sample_pos in placements:
+            for sample_pos, sample_rot in placements:
                 tpl0 = time.time()
 
                 # get gripper transform at placement
                 place_obj_transform = translation_quaternion2homogeneous(
                     sample_pos,
-                    [0, 0, 0, 1],
+                    sample_rot,
+                    # [0, 0, 0, 1],
                 )
                 gripper_transform = place_obj_transform.dot(obj2gripper)
                 pos, rot = homogeneous2translation_quaternion(gripper_transform)
@@ -344,7 +345,7 @@ class PrimitivePlanner():
                 add2dict(time_info, 'total_place', tpl1 - tpl0)
                 print("Total Place Time: ", time_info['total_place'])
 
-                time_info['placement'] = sample_pos
+                time_info['placement'] = (sample_pos, sample_rot)
                 ## Execute Place ##
                 print(f"Succeded to plan move for Object {obj.obj_id}!")
                 t0 = time.time()
@@ -517,7 +518,7 @@ class PrimitivePlanner():
             obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
             obj2gripper = np.linalg.inv(obj_rel_transform)
             shuffle(placements)
-            for sample_pos in placements:
+            for sample_pos, sample_rot in placements:
                 tpl0 = time.time()
 
                 # get gripper transform at placement
@@ -525,7 +526,8 @@ class PrimitivePlanner():
                 # gripper_transform = obj_transform.dot(obj2gripper)
                 place_obj_transform = translation_quaternion2homogeneous(
                     sample_pos,
-                    [0, 0, 0, 1],
+                    sample_rot,
+                    # [0, 0, 0, 1],
                 )
                 gripper_transform = place_obj_transform.dot(obj2gripper)
                 pos, rot = homogeneous2translation_quaternion(gripper_transform)
@@ -614,7 +616,7 @@ class PrimitivePlanner():
                 add2dict(time_info, 'total_place', tpl1 - tpl0)
                 print("Total Place Time: ", time_info['total_place'])
 
-                time_info['placement'] = sample_pos
+                time_info['placement'] = (sample_pos, sample_rot)
                 ## Execute ##
                 print(f"Succeded to plan move for Object {obj.obj_id}!")
                 t0 = time.time()
@@ -874,7 +876,7 @@ class PrimitivePlanner():
         #     )
         #     t1 = time.time()
         #     print("Placement Sample Time: ", t1 - t0)
-        for sample_pos in reversed(placements):
+        for sample_pos, sample_rot in reversed(placements):
             print(sample_pos)
 
             # get gripper to object matrix

@@ -6,7 +6,9 @@ import cv2
 import numpy as np
 import pybullet as p
 import open3d as o3d
+import scipy.signal as ss
 import transformations as tf
+import matplotlib.pyplot as plt
 from scipy.ndimage import rotate
 
 from utils.visual_utils import *
@@ -77,6 +79,7 @@ def generate_placements(
     - a_res (angular resolution) should be an even number
     """
     obj_local_id = execution.object_local_id_dict[str(obj.pybullet_id)]
+    shape = perception.occlusion.occlusion.shape
     resol = perception.occlusion.resol
     # occlusion_label, occupied_label = perception.occlusion_label_t, perception.occupied_label_t
     occlusion_label, occupied_label = perception.filtered_occlusion_label, perception.occupied_label_t
@@ -101,40 +104,61 @@ def generate_placements(
         degs = angle * 180 / np.pi
         # generate kernel for collision mask
         kernel = get_object_mask(obj, robot, execution, perception, degs)
+        print(shape)
+        h = shape[0] + kernel.shape[0]
+        kernel_occ = ss.correlate2d(kernel, np.ones((h, 1)))[:-kernel.shape[0], :] >= 1
+        add_shape = (kernel_occ.shape[0] - kernel.shape[0], kernel.shape[1])
+        kernel_occ = np.concatenate((np.zeros(add_shape), kernel_occ)).astype('uint8')
+        # kernel_occ /= kernel_occ.sum()
         print(f"{obj.obj_id}:")
-        print(kernel[:, :])
+        print(kernel)
+        print(kernel_occ[add_shape[0] - 3:-add_shape[0] + 3, :])
 
         # free_x, free_y = np.where(((occlusion_label <= 0) & (occupied_label == 0)).all(2))
         free_x, free_y = np.where((occlusion_label <= 0).all(2))
-        shape = perception.occlusion.occlusion.shape
-        img = 255 * np.ones(shape[0:2]).astype('uint8')
+        img = 1.0 * np.ones(shape[0:2])  #.astype('uint8')
         img[free_x, free_y] = 0
-        img[0, :] = 255
-        img[-1, :] = 255
-        img[:, 0] = 255
-        img[:, -1] = 255
+        img[0, :] = 1
+        img[-1, :] = 1
+        img[:, 0] = 1
+        img[:, -1] = 1
+        img2 = 1.0 * np.ones(shape[0:2])
+        img2[free_x, free_y] = 0
+        fimg = ss.correlate2d(img, kernel, mode='same')
+        fimg /= fimg.max()
+        fimg_occ = ss.correlate2d(img2, kernel_occ, mode='same')
+        fimg_occ /= fimg_occ.max()
+        pimg_occ = 1 - fimg_occ
         if display:
-            cv2.imshow("Test0", img)
-            cv2.waitKey(0)
-        fimg = cv2.filter2D(img, -1, kernel)
-        if display:
-            cv2.imshow("Test1", fimg)
-            cv2.waitKey(0)
+            fig = plt.figure(figsize=(6, 11))
+            fig.add_subplot(3, 1, 1)
+            plt.imshow(img)
+            fig.add_subplot(3, 1, 2)
+            plt.imshow((fimg != 0) * 1.0)
+            print(fimg)
+            fig.add_subplot(3, 1, 3)
+            plt.imshow(fimg_occ / fimg_occ.sum())
+            print(fimg_occ)
+            print(pimg_occ)
+            plt.show()
         mink_x, mink_y = np.where(fimg == 0)
-        samples = list(
-            zip(
+        samples = [
+            list(x) for x in zip(
                 zip(
                     mink_x * resol[0] + ws_low[0],
                     mink_y * resol[1] + ws_low[1],
                     [z] * len(mink_x),
                 ),
                 [p.getQuaternionFromEuler((0, 0, angle))] * len(mink_x),
+                pimg_occ[mink_x, mink_y],
             )
-        )
+        ]
         # print("samples:", samples)
-        if display:
-            cv2.destroyAllWindows()
         all_samples += samples
+    total = sum([w for p, r, w in all_samples])
+    for i in range(len(all_samples)):
+        all_samples[i][2] /= total
+    print(all_samples)
     return all_samples
 
 

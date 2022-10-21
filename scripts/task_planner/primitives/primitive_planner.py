@@ -248,7 +248,7 @@ class PrimitivePlanner():
             obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
             obj2gripper = np.linalg.inv(obj_rel_transform)
             shuffle(placements)
-            for sample_pos, sample_rot in placements:
+            for sample_pos, sample_rot, prob in placements:
                 tpl0 = time.time()
 
                 # get gripper transform at placement
@@ -518,7 +518,7 @@ class PrimitivePlanner():
             obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
             obj2gripper = np.linalg.inv(obj_rel_transform)
             shuffle(placements)
-            for sample_pos, sample_rot in placements:
+            for sample_pos, sample_rot, prob in placements:
                 tpl0 = time.time()
 
                 # get gripper transform at placement

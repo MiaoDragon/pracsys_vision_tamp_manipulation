@@ -30,6 +30,7 @@ import open3d as o3d
 import transformations as tf
 
 from utils.visual_utils import *
+from utils.transform_utils import *
 
 # PYBULLET_MODE = p.DIRECT
 PYBULLET_MODE = p.GUI
@@ -191,6 +192,11 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
                     x, y = obj_poses[prev_ind][:2, 3]
                     z = 0.001
                     z += obj_tops[prev_ind] + z_size
+                    quat = p.getBasePositionAndOrientation(
+                        obj_ids[prev_ind],
+                        physicsClientId=pid,
+                    )[1]
+                    mRot = obj_poses[prev_ind][:3, :3]
                 else:
                     x = np.random.uniform(
                         low=workspace_low[0] + x_size / 2 + x_low_offset,
@@ -202,6 +208,10 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
                     )
                     z = 0.001
                     z += workspace_low[2] + z_size
+                    quat = p.getQuaternionFromEuler(
+                        (0, 0, np.random.uniform(-np.pi, np.pi))
+                    )
+                    mRot = np.reshape(p.getMatrixFromQuaternion(quat), (3, 3))
 
                 # save top coord for later and adjust current z
                 ztop = z
@@ -233,8 +243,7 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
                     baseCollisionShapeIndex=cid,
                     baseVisualShapeIndex=vid,
                     basePosition=[x, y, z],
-                    baseOrientation=[0, 0, 0, 1]
-                    # baseOrientation=[0, 0, 0.5, 0.5]
+                    baseOrientation=quat
                 )
                 # check collision with scene
                 collision = False
@@ -279,7 +288,7 @@ def random_stacked_problem(scene, level, num_objs, num_hiding_objs):
 
                 obj_ids.append(bid)
                 pose = np.zeros((4, 4))
-                pose[:3, :3] = np.eye(3)
+                pose[:3, :3] = mRot  # np.eye(3)
                 pose[:3, 3] = np.array([x, y, z])
                 obj_poses.append(pose)
                 obj_pcds.append(pcd)
@@ -719,6 +728,7 @@ def load_problem(
         color = [*from_color_map(i, num_objs), 1]
         x_size, y_size, z_size = obj_sizes[i]
         x, y, z = obj_poses[i][:3, 3]
+        quat = getQuaternionFromMatrix(obj_poses[i][:3, :3])
         if obj_shape != 'cylinder':
             # sample a pose in the workspace
             cid = p.createCollisionShape(
@@ -733,7 +743,7 @@ def load_problem(
                 baseCollisionShapeIndex=cid,
                 baseVisualShapeIndex=vid,
                 basePosition=[x, y, z],
-                baseOrientation=[0, 0, 0, 1]
+                baseOrientation=quat
             )
         else:
             cid = p.createCollisionShape(
@@ -749,7 +759,7 @@ def load_problem(
                 baseCollisionShapeIndex=cid,
                 baseVisualShapeIndex=vid,
                 basePosition=[x, y, z],
-                baseOrientation=[0, 0, 0, 1]
+                baseOrientation=quat
             )
         obj_ids.append(bid)
 
@@ -1236,6 +1246,7 @@ def load_problem_level(
         #     z_size = height_scale[2]
 
         x, y, z = obj_poses[i][:3, 3]
+        quat = getQuaternionFromMatrix(obj_poses[i][:3, :3])
         z_offset = 0.001
         # z = workspace_low[2] + z_size / 2 + z_offset
 
@@ -1253,7 +1264,7 @@ def load_problem_level(
                 baseCollisionShapeIndex=cid,
                 baseVisualShapeIndex=vid,
                 basePosition=[x, y, z],
-                baseOrientation=[0, 0, 0, 1]
+                baseOrientation=quat,
             )
         else:
             cid = p.createCollisionShape(
@@ -1269,7 +1280,7 @@ def load_problem_level(
                 baseCollisionShapeIndex=cid,
                 baseVisualShapeIndex=vid,
                 basePosition=[x, y, z],
-                baseOrientation=[0, 0, 0, 1]
+                baseOrientation=quat
             )
         obj_ids.append(bid)
 

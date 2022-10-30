@@ -9,7 +9,21 @@ and implementations of task actions
 import gc
 import copy
 import time
-from random import shuffle
+import random
+
+
+def biased_shuffle(a):
+    # random.shuffle(a)
+    ws = [w[2] + 1e-10 for w in a]
+    sum_w = sum(ws)
+    probs = [1.0 * w / sum_w for w in ws]
+    b = []
+    # do recursively inplace instead
+    for i in np.random.choice(len(a), len(a), False, probs):
+        b.append(list(a[i]))
+    for i, v in enumerate(b):
+        a[i] = v
+
 
 import cv2
 import rospy
@@ -247,7 +261,7 @@ class PrimitivePlanner():
             ee_transform = robot.get_tip_link_pose(grasp_joint_dict)
             obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
             obj2gripper = np.linalg.inv(obj_rel_transform)
-            shuffle(placements)
+            biased_shuffle(placements)
             for sample_pos, sample_rot, prob in placements:
                 tpl0 = time.time()
 
@@ -385,6 +399,28 @@ class PrimitivePlanner():
         print("Total time: ", time_info['total'])
         return False, time_info
 
+    def MoveEndEffectorAndPercieve(self):
+        robot = self.execution.scene.robot
+        ## Plan Perception Pose ##
+        t0 = time.time()
+        inter_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
+            robot.joint_dict,
+            self.intermediate_joint_dict,
+            attached_acos=[],
+        )
+        t1 = time.time()
+        # add2dict(time_info, 'inter_plan', [t1 - t0])
+        print("Intermediate Plan Time: ", t1 - t0)
+        ## Update Perception ##
+        t0 = time.time()
+        self.execution.execute_traj(inter_joint_dict_list)
+        rospy.sleep(0.001)
+        print("** Perception Started... **")
+        self.pipeline_sim()
+        t1 = time.time()
+        # time_info['perception'] = t1 - t0
+        print("** Perception Done! (", t1 - t0, ") **")
+
     def TryMoveOneObject(self, obj, pre_grasp_dist=0.02, pre_place_dist=0.08):
         robot = self.execution.scene.robot
         obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
@@ -469,27 +505,7 @@ class PrimitivePlanner():
             add2dict(time_info, 'total_pick', tpk1 - tpk0)
             print("Total Pick Time: ", time_info['total_pick'])
 
-            if self.dep_graph and self.dep_graph.target_id and self.dep_graph.target_id in self.dep_graph.graph:
-                print("** Target Seen, Skipping Intermediate **")
-                new_start_joint_dict = lift_joint_dict_list[-1]
-            else:
-                ## Plan Intermediate ##
-                t0 = time.time()
-                aco = self.attach_known(obj, robot, new_start_joint_dict)
-                inter_joint_dict_list = self.motion_planner.joint_dict_motion_plan(
-                    lift_joint_dict_list[-1],
-                    self.intermediate_joint_dict,
-                    attached_acos=[aco],
-                )
-                self.detach_known(obj)
-                t1 = time.time()
-                add2dict(time_info, 'inter_plan', [t1 - t0])
-                print("Intermediate Plan Time: ", time_info['inter_plan'][-1])
-                if not inter_joint_dict_list:
-                    tpk1 = time.time()
-                    add2dict(time_info, 'total_pick', tpk1 - tpk0)
-                    continue
-                new_start_joint_dict = inter_joint_dict_list[-1]
+            new_start_joint_dict = lift_joint_dict_list[-1]
             ## Place ##
             grasp_joint_dict = pick_joint_dict_list[-1]
             ## random version ##
@@ -517,7 +533,7 @@ class PrimitivePlanner():
             ee_transform = robot.get_tip_link_pose(grasp_joint_dict)
             obj_rel_transform = np.linalg.inv(ee_transform).dot(obj_transform)
             obj2gripper = np.linalg.inv(obj_rel_transform)
-            shuffle(placements)
+            biased_shuffle(placements)
             for sample_pos, sample_rot, prob in placements:
                 tpl0 = time.time()
 
@@ -544,6 +560,7 @@ class PrimitivePlanner():
                 add2dict(time_info, 'place_ik', [t1 - t0])
                 print("Place IK Time: ", time_info['place_ik'][-1])
                 if not valid:
+                    input('next...')
                     robot.set_joints_without_memorize(robot.joint_vals)
                     tpl1 = time.time()
                     add2dict(time_info, 'total_place', tpl1 - tpl0)
@@ -611,7 +628,6 @@ class PrimitivePlanner():
                     workspace=self.scene.workspace,
                     display=False
                 )
-
                 tpl1 = time.time()
                 add2dict(time_info, 'total_place', tpl1 - tpl0)
                 print("Total Place Time: ", time_info['total_place'])
@@ -624,20 +640,6 @@ class PrimitivePlanner():
                 self.execution.execute_traj(pick_joint_dict_list)
                 self.execution.attach_obj(obj.obj_id)
                 self.execution.execute_traj(lift_joint_dict_list)
-
-                ## Update Perception ##
-                if self.dep_graph and self.dep_graph.target_id and self.dep_graph.target_id in self.dep_graph.graph:
-                    print("** Target Seen, Skipping Perception **")
-                else:
-                    self.execution.execute_traj(inter_joint_dict_list)
-                    rospy.sleep(0.001)
-                    print("** Perception Started... **")
-                    t0 = time.time()
-                    self.pipeline_sim()
-                    t1 = time.time()
-                    time_info['perception'] = t1 - t0
-                    print("** Perception Done! (", time_info['perception'], ") **")
-
                 self.execution.execute_traj(place_joint_dict_list)
                 self.execution.detach_obj()
                 self.execution.execute_traj(lift_joint_dict_list2)

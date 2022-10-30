@@ -1,6 +1,13 @@
 import std_msgs
+import numpy as np
 from tf.transformations import *
 from geometry_msgs.msg import Pose, PoseStamped
+
+
+def getQuaternionFromMatrix(mat):
+    homo = np.eye(4)
+    homo[:3, :3] = mat
+    return quaternion_from_matrix(homo)
 
 
 def homogeneous2translation_quaternion(homogeneous):

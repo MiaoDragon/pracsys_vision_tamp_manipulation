@@ -177,7 +177,7 @@ class TaskPlanner():
         while not failure:
             self.dep_graph.rerun()
             self.dep_graph.draw_graph(
-                path=None#f"{self.prob_id}_{time.strftime('%Y-%m-%d_%H:%M:%S')}.png"
+                path=None  #f"{self.prob_id}_{time.strftime('%Y-%m-%d_%H:%M:%S')}.png"
             )
             sinks, probs = self.dep_graph.sinks(lambda x: x**3 + 0.001)
             # sinks, probs = self.dep_graph.sinks(lambda x: x * 0 + 1)
@@ -218,6 +218,8 @@ class TaskPlanner():
                         continue
                     failure = time.time() - t0 > timeout
                     break
+            if not failure:
+                self.planner.MoveEndEffectorAndPercieve()
 
         if failure:
             time_infos.append({'timed_out': time.time() - t0 > timeout, 'success': False})

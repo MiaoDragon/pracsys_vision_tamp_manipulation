@@ -73,7 +73,7 @@ def get_object_mask(
 
 
 def generate_placements(
-    obj, robot, execution, perception, workspace, display=False, a_res=12
+    obj, robot, execution, perception, workspace, display=True, a_res=12
 ):
     """
     - a_res (angular resolution) should be an even number
@@ -114,32 +114,31 @@ def generate_placements(
         print(kernel)
         print(kernel_occ[add_shape[0] - 3:-add_shape[0] + 3, :])
 
-        # free_x, free_y = np.where(((occlusion_label <= 0) & (occupied_label == 0)).all(2))
-        free_x, free_y = np.where((occlusion_label <= 0).all(2))
-        img = 1.0 * np.ones(shape[0:2])  #.astype('uint8')
-        img[free_x, free_y] = 0
-        img[0, :] = 1
-        img[-1, :] = 1
-        img[:, 0] = 1
-        img[:, -1] = 1
-        img2 = 1.0 * np.ones(shape[0:2])
-        img2[free_x, free_y] = 0
-        fimg = ss.correlate2d(img, kernel, mode='same')
+        ofree_x, ofree_y = np.where((occlusion_label <= 0).all(2))
+        cfree_x, cfree_y = np.where((occupied_label == 0).all(2))
+        oimg = 1.0 * np.ones(shape[0:2])  #.astype('uint8')
+        cimg = 1.0 * np.ones(shape[0:2])  #.astype('uint8')
+        oimg[ofree_x, ofree_y] = 0
+        cimg[cfree_x, cfree_y] = oimg[cfree_x,cfree_y]
+        cimg[0, :] = 1
+        cimg[-1, :] = 1
+        cimg[:, 0] = 1
+        cimg[:, -1] = 1
+        fimg = ss.correlate2d(cimg, kernel, mode='same')
         fimg /= fimg.max()
-        fimg_occ = ss.correlate2d(img2, kernel_occ, mode='same')
-        fimg_occ /= fimg_occ.max()
-        pimg_occ = 1 - fimg_occ
+        ofimg = ss.correlate2d(oimg, kernel_occ, mode='same')
+        ofimg /= ofimg.max()
+        pimg = 1 - ofimg
         if display:
-            fig = plt.figure(figsize=(6, 11))
-            fig.add_subplot(3, 1, 1)
-            plt.imshow(img)
-            fig.add_subplot(3, 1, 2)
+            fig = plt.figure(figsize=(12, 11))
+            fig.add_subplot(2, 2, 1)
+            plt.imshow(cimg)
+            fig.add_subplot(2, 2, 2)
+            plt.imshow(oimg)
+            fig.add_subplot(2, 2, 3)
             plt.imshow((fimg != 0) * 1.0)
-            print(fimg)
-            fig.add_subplot(3, 1, 3)
-            plt.imshow(fimg_occ / fimg_occ.sum())
-            print(fimg_occ)
-            print(pimg_occ)
+            fig.add_subplot(2, 2, 4)
+            plt.imshow(ofimg / ofimg.sum())
             plt.show()
         mink_x, mink_y = np.where(fimg == 0)
         samples = [
@@ -150,7 +149,7 @@ def generate_placements(
                     [z] * len(mink_x),
                 ),
                 [p.getQuaternionFromEuler((0, 0, angle))] * len(mink_x),
-                pimg_occ[mink_x, mink_y],
+                pimg[mink_x, mink_y],
             )
         ]
         # print("samples:", samples)
@@ -158,7 +157,7 @@ def generate_placements(
     total = sum([w for p, r, w in all_samples])
     for i in range(len(all_samples)):
         all_samples[i][2] /= total
-    print(all_samples)
+    # print(all_samples)
     return all_samples
 
 

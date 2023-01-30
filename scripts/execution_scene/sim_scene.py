@@ -29,22 +29,25 @@ class ExecutionSystem():
 
     def __init__(self, robot_xml, scene=None, trial=None, gui=True):
         self.robot_model_name = 'sda10f'
-        self.pub_joint_names = [
-            "sda10f/torso_joint_b1",
-            "sda10f/arm_left_joint_1_s",
-            "sda10f/arm_left_joint_2_l",
-            "sda10f/arm_left_joint_3_e",
-            "sda10f/arm_left_joint_4_u",
-            "sda10f/arm_left_joint_5_r",
-            "sda10f/arm_left_joint_6_b",
-            "sda10f/arm_left_joint_7_t",
-            "sda10f/arm_right_joint_1_s",
-            "sda10f/arm_right_joint_2_l",
-            "sda10f/arm_right_joint_3_e",
-            "sda10f/arm_right_joint_4_u",
-            "sda10f/arm_right_joint_5_r",
-            "sda10f/arm_right_joint_6_b",
-            "sda10f/arm_right_joint_7_t",
+        self.joint_names = [
+            "torso_joint_b1",
+            "arm_left_joint_1_s",
+            "arm_left_joint_2_l",
+            "arm_left_joint_3_e",
+            "arm_left_joint_4_u",
+            "arm_left_joint_5_r",
+            "arm_left_joint_6_b",
+            "arm_left_joint_7_t",
+            "arm_right_joint_1_s",
+            "arm_right_joint_2_l",
+            "arm_right_joint_3_e",
+            "arm_right_joint_4_u",
+            "arm_right_joint_5_r",
+            "arm_right_joint_6_b",
+            "arm_right_joint_7_t",
+        ]
+        self.mj_joint_names = [
+            self.robot_model_name + '/' + jn for jn in self.joint_names
         ]
         if trial is not None:
             with open(trial, 'rb') as f:
@@ -152,7 +155,7 @@ class ExecutionSystem():
         # self.rgb_img, self.depth_img, self.seg_img = self.camera.sense()
         return ExecuteTrajectoryResponse(num_collision, True)
 
-    def publish_image(self):
+    def publish_image(self, timer_event):
         """
         obtain image from mujoco and publish
         """
@@ -171,15 +174,15 @@ class ExecutionSystem():
         msg.header.stamp = rospy.Time.now()
         self.seg_cam_pub.publish(msg)
 
-    def publish_robot_state(self):
+    def publish_robot_state(self, timer_event):
         """
         obtain joint state from Mujoco and publish
         """
 
-        iqpos = self.get_qpos_indices(self.pub_joint_names)
-        iqvel = self.get_qvel_indices(self.pub_joint_names)
+        iqpos = self.get_qpos_indices(self.mj_joint_names)
+        iqvel = self.get_qvel_indices(self.mj_joint_names)
         msg = JointState()
-        msg.name = self.pub_joint_names
+        msg.name = self.joint_names
         msg.position = self.data.qpos[iqpos]
         msg.velocity = self.data.qvel[iqvel]
         msg.header.stamp = rospy.Time.now()
@@ -189,13 +192,13 @@ class ExecutionSystem():
         """
         keep spinning and publishing to the ROS topics
         """
-        rate = rospy.Rate(10)
+        jsT = rospy.Timer(rospy.Duration(0.1), self.publish_robot_state)
+        # imT = rospy.Timer(rospy.Duration(0.1), self.publish_image)
+        # rospy.Timer(rospy.Duration(0.1), self.publish_objects)
         while not rospy.is_shutdown():
             self.step()
-            self.publish_robot_state()
-            # self.publish_image()
-            # self.publish_objects()
-            rate.sleep()
+        jsT.shutdown()
+        # imT.shutdown()
 
 
 if __name__ == "__main__":
@@ -207,10 +210,16 @@ if __name__ == "__main__":
         print('Please specify robot xml file.', file=sys.stderr)
         sys.exit(-1)
     scene_or_trial = sys.argv[2].strip() if len(sys.argv) > 2 else None
+    gui = sys.argv[3][0] in ('t', 'T', 'y', 'Y') if len(sys.argv) > 3 else False
     trial = scene_or_trial if scene_or_trial.split('.')[-1] == 'pkl' else None
     scene = scene_or_trial if scene_or_trial.split('.')[-1] == 'json' else None
     if scene is None and trial is None:
         print('Please specify json or pkl file.', file=sys.stderr)
         sys.exit(-1)
-    execution_system = ExecutionSystem(robot_xml, scene, trial)
+    execution_system = ExecutionSystem(
+        robot_xml,
+        scene,
+        trial,
+        gui,
+    )
     execution_system.run()

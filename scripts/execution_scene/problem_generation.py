@@ -79,12 +79,14 @@ def load_problem(scene_json, robot_xml, obj_poses, obj_shapes, obj_sizes):
         elif obj_shape == 'cylinder':
             sizes = [x_size / 2, z_size / 2]
 
-        world_model.worldbody.add(
+        obj_body = world_model.worldbody.add(
             'body',
             name=f'body{i}',
             pos=[x, y, z],
             quat=quat,
-        ).add(
+        )
+        obj_body.add('freejoint')
+        obj_body.add(
             'geom',
             name=f'geom{i}',
             type=obj_shape,

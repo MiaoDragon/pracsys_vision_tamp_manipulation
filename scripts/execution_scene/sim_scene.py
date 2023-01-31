@@ -18,7 +18,7 @@ from sensor_msgs.msg import Image, JointState
 from trajectory_msgs.msg import JointTrajectory
 from shape_msgs.msg import SolidPrimitive, Mesh, MeshTriangle
 
-import mujoco
+from dm_control import mujoco
 import mujoco_viewer
 import problem_generation as prob_gen
 from pracsys_vision_tamp_manipulation.msg import PercievedObject
@@ -71,8 +71,9 @@ class ExecutionSystem():
             with open(fname, 'rb') as f:
                 ASSETS[fname] = f.read()
         fixed_xml_str = re.sub('-[a-f0-9]+.stl', '.stl', world_model.to_xml_string())
-        self.model = mujoco.MjModel.from_xml_string(fixed_xml_str, ASSETS)
-        self.data = mujoco.MjData(self.model)
+        self.physics = mujoco.Physics.from_xml_string(fixed_xml_str, ASSETS)
+        self.model = self.physics.model._model
+        self.data = self.physics.data._data
         self.viewer = mujoco_viewer.MujocoViewer(self.model, self.data) if gui else None
 
         # self.camera = camera
@@ -120,7 +121,8 @@ class ExecutionSystem():
         return pairs
 
     def step(self):
-        mujoco.mj_step(self.model, self.data)
+        # mujoco.mj_step(self.model, self.data)
+        self.physics.step()
         if self.viewer is not None and self.viewer.is_alive:
             self.viewer.render()
 
@@ -160,7 +162,9 @@ class ExecutionSystem():
         obtain image from mujoco and publish
         """
 
-        #TODO: get image from mujoco sensor
+        self.rgb_img = self.physics.render(camera_id=0)
+        self.depth_img = self.physics.render(camera_id=0, depth=True)
+        self.seg_img = self.physics.render(camera_id=0, segmentation=True)
 
         msg = self.bridge.cv2_to_imgmsg(self.rgb_img, 'passthrough')
         msg.header.stamp = rospy.Time.now()

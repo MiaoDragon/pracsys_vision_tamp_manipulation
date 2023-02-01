@@ -38,7 +38,10 @@ def load_problem(scene_json, robot_xml, obj_poses, obj_shapes, obj_sizes):
       <worldbody>
         <geom name="floor" size="2 2 .05" type="plane" material="grid" condim="3"/>
         <light directional="true" pos="-0.5 0.5 3" dir="0 0 -1" castshadow="false" diffuse="1 1 1"/>
-        <camera name="cam" pos="0.1 0 1.5" zaxis="1 0 0"/>
+        <body name="body_cam" pos="0.4 0 1.1" xyaxes="0 -1 0 0 0 1" mocap="true">
+          <camera name="cam" fovy="90"/>
+          <geom name="geom_cam" size="0.04 0.04 0.01" type="box" rgba="0 0 0 1" contype="2" conaffinity="2"/>
+        </body>
         <body name="scene" pos="0 0 0">
         </body>
         <body name="phys" pos="-0.5 0 0">

@@ -164,7 +164,8 @@ class ExecutionSystem():
 
         self.rgb_img = self.physics.render(camera_id=0)
         self.depth_img = self.physics.render(camera_id=0, depth=True)
-        self.seg_img = self.physics.render(camera_id=0, segmentation=True)
+        seg_img = self.physics.render(camera_id=0, segmentation=True)
+        self.seg_img = seg_img[:, :, 0]
 
         msg = self.bridge.cv2_to_imgmsg(self.rgb_img, 'passthrough')
         msg.header.stamp = rospy.Time.now()

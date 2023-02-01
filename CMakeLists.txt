@@ -30,6 +30,7 @@ add_message_files(
   FILES
   RobotState.msg
   PercievedObject.msg
+  ObjectGroundTruthState.msg
 )
 
 add_service_files(

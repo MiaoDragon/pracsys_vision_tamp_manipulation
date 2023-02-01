@@ -18,10 +18,11 @@ from sensor_msgs.msg import Image, JointState
 from trajectory_msgs.msg import JointTrajectory
 from shape_msgs.msg import SolidPrimitive, Mesh, MeshTriangle
 
-from dm_control import mujoco
 import mujoco_viewer
+from dm_control import mujoco
 import problem_generation as prob_gen
-from pracsys_vision_tamp_manipulation.msg import PercievedObject
+
+from pracsys_vision_tamp_manipulation.msg import ObjectGroundTruthState
 from pracsys_vision_tamp_manipulation.srv import ExecuteTrajectory, ExecuteTrajectoryResponse
 
 
@@ -92,7 +93,9 @@ class ExecutionSystem():
         self.depth_cam_pub = rospy.Publisher('depth_image', Image, queue_size=5)
         self.seg_cam_pub = rospy.Publisher('seg_image', Image, queue_size=5)
         self.js_pub = rospy.Publisher('joint_state', JointState, queue_size=5)
-        # self.obj_pub = rospy.Publisher('object_state', PercievedObject, queue_size=5)
+        self.obj_pub = rospy.Publisher(
+            'object_ground_truth_state', ObjectGroundTruthState, queue_size=5
+        )
 
     def get_objq_indices(self, obj_name):
         jnt = self.model.joint(self.model.body(obj_name).jntadr[0])
@@ -193,13 +196,42 @@ class ExecutionSystem():
         msg.header.stamp = rospy.Time.now()
         self.js_pub.publish(msg)
 
+    def publish_ground_truth_state(self, timer_event):
+        names = []
+        poses = []
+        for i in range(self.model.njnt):
+            jnt = self.model.jnt(i)
+            name = self.model.jnt(i).name
+            if name[:5] == 'joint':
+                # get qpos indices for joint
+                iqpos = np.array(range(jnt.qposadr[0], jnt.qposadr[0] + len(jnt.qpos0)))
+                pos_quat = self.data.qpos[iqpos]
+                pose = Pose()
+                pose.position.x = pos_quat[0]
+                pose.position.y = pos_quat[1]
+                pose.position.z = pos_quat[2]
+                pose.orientation.w = pos_quat[3]
+                pose.orientation.x = pos_quat[4]
+                pose.orientation.y = pos_quat[5]
+                pose.orientation.z = pos_quat[6]
+                names.append(name)
+                poses.append(pose)
+
+        msg = ObjectGroundTruthState()
+        msg.header.stamp = rospy.Time.now()
+        msg.id = names
+        msg.pose = poses
+        self.obj_pub.publish(msg)
+
     def run(self):
         """
         keep spinning and publishing to the ROS topics
         """
+
         jsT = rospy.Timer(rospy.Duration(0.1), self.publish_robot_state)
-        # imT = rospy.Timer(rospy.Duration(0.1), self.publish_image)
-        # rospy.Timer(rospy.Duration(0.1), self.publish_objects)
+        imT = rospy.Timer(rospy.Duration(0.1), self.publish_image)
+        obT = rospy.Timer(rospy.Duration(0.1), self.publish_ground_truth_state)
+
         while not rospy.is_shutdown():
             self.step()
         jsT.shutdown()

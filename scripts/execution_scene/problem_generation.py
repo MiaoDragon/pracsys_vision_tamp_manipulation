@@ -18,7 +18,7 @@ import transformations as tf
 
 from dm_control import mjcf
 from utils.visual_utils import *
-from utils.transform_utils import *
+# from utils.transform_utils import *
 
 
 def load_problem(scene_json, robot_xml, obj_poses, obj_shapes, obj_sizes):
@@ -85,14 +85,14 @@ def load_problem(scene_json, robot_xml, obj_poses, obj_shapes, obj_sizes):
 
         obj_body = world_model.worldbody.add(
             'body',
-            name=f'body{i}',
+            name=f'body_{i}',
             pos=[x, y, z],
             quat=quat,
         )
-        obj_body.add('freejoint')
+        obj_body.add('freejoint', name=f'joint_{i}')
         obj_body.add(
             'geom',
-            name=f'geom{i}',
+            name=f'geom_{i}',
             type=obj_shape,
             condim=1,
             size=sizes,

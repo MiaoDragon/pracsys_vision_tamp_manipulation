@@ -73,7 +73,7 @@ def get_object_mask(
 
 
 def generate_placements(
-    obj, robot, execution, perception, workspace, display=True, a_res=12
+    obj, robot, execution, perception, workspace, display=False, a_res=12
 ):
     """
     - a_res (angular resolution) should be an even number

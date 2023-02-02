@@ -349,8 +349,8 @@ class ExecutionInterface():
         cuid = p.createCollisionShape(
             shape_type,
             halfExtents=np.multiply(0.5, dimensions),  # array of half dimensions if BOX
-            radius=dimensions[self.r_index(shape_type)],  # [0] if SPHERE, [1] if CYLINDER
-            height=dimensions[0],  # [0] if CYLINDER
+            radius=0.5*dimensions[0],  # [0] if SPHERE, [1] if CYLINDER
+            height=dimensions[1],  # [0] if CYLINDER
             physicsClientId=self.scene.robot.pybullet_id,
         )
         mass = 0  # static box

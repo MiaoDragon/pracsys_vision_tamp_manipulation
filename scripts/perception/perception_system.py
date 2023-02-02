@@ -151,7 +151,8 @@ class PerceptionSystem():
 
             if (not (obj_id in self.objects)):
                 # create new object
-                new_object = ObjectBelief(obj_id, self.data_assoc.obj_ids_reverse[obj_id], self.p2l_pid[str(self.data_assoc.obj_ids_reverse[obj_id])], xmin, ymin, zmin, xmax, ymax, zmax, self.object_params['resol'], self.object_params['scale'], use_color=self.tsdf_color_flag)
+                print(obj_id, self.p2l_pid, self.data_assoc.obj_ids_reverse)
+                new_object = ObjectBelief(obj_id, self.data_assoc.obj_ids_reverse[obj_id], obj_id, xmin, ymin, zmin, xmax, ymax, zmax, self.object_params['resol'], self.object_params['scale'], use_color=self.tsdf_color_flag)
                 self.objects[obj_id] = new_object
                 self.obj_initial_poses[obj_id] = new_object.transform
                 self.objects[obj_id].set_active()

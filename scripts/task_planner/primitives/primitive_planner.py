@@ -100,7 +100,8 @@ class PrimitivePlanner():
         pre_place_dist=0.08,
     ):
         robot = self.execution.scene.robot
-        obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        # obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        obj_local_id = obj.pybullet_id
         time_info = {"success": False, "action": "MoveOrPlaceback", "object": obj.obj_id}
         did_uncover = False
         total0 = time.time()
@@ -423,7 +424,8 @@ class PrimitivePlanner():
 
     def TryMoveOneObject(self, obj, pre_grasp_dist=0.02, pre_place_dist=0.08):
         robot = self.execution.scene.robot
-        obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        # obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        obj_local_id = obj.pybullet_id
         time_info = {"success": False, "action": "TryMoveOneObject", "object": obj.obj_id}
         total0 = time.time()
 
@@ -659,7 +661,8 @@ class PrimitivePlanner():
 
     def grasp_test(self, obj):
         # robot = self.scene.robot
-        obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        # obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        obj_local_id = obj.pybullet_id
         robot = self.execution.scene.robot
         # print("***", self.scene == self.execution.scene, "***")
         # print(list(self.perception.filtered_occluded_dict.keys()))
@@ -690,7 +693,8 @@ class PrimitivePlanner():
 
     def pick(self, obj, pre_grasp_dist=0.02):
         robot = self.execution.scene.robot
-        obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        # obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        obj_local_id = obj.pybullet_id
         time_info = {"success": False, "action": "Retrieve", "object": obj.obj_id}
         total0 = time.time()
 
@@ -779,7 +783,8 @@ class PrimitivePlanner():
         return False, time_info
 
     def attach_known(self, obj, robot, grasp_joint_dict):
-        obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        # obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        obj_local_id = obj.pybullet_id
         ee_transform_now = robot.get_tip_link_pose(
             {key: 0.0
              for key in grasp_joint_dict.keys()}
@@ -842,7 +847,8 @@ class PrimitivePlanner():
 
     def place(self, obj, start_joint_dict, grasp_joint_dict, pre_place_dist=0.08):
         robot = self.execution.scene.robot
-        obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        # obj_local_id = self.execution.object_local_id_dict[str(obj.pybullet_id)]
+        obj_local_id = obj.pybullet_id
 
         ## Set Collision Space ##
         self.set_collision_env_with_models(obj.obj_id)

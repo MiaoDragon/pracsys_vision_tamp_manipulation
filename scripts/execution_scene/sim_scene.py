@@ -22,8 +22,8 @@ import mujoco_viewer
 from dm_control import mujoco
 import problem_generation as prob_gen
 
-from pracsys_vision_tamp_manipulation.msg import ObjectGroundTruthState
-from pracsys_vision_tamp_manipulation.srv import ExecuteTrajectory, ExecuteTrajectoryResponse
+from pracsys_vision_tamp_manipulation.msg import ObjectGroundTruthState, RobotState, PercievedObject
+from pracsys_vision_tamp_manipulation.srv import ExecuteTrajectory, ExecuteTrajectoryResponse, AttachObject, AttachObjectResponse
 
 
 class ExecutionSystem():
@@ -83,6 +83,7 @@ class ExecutionSystem():
         # * initialize ROS services
         # - robot trajectory tracker
         rospy.Service("execute_trajectory", ExecuteTrajectory, self.execute_trajectory)
+        rospy.Service("attach_object", AttachObject, self.attach_object)
 
         # * initialize ROS pubs and subs
         # - camera
@@ -93,9 +94,18 @@ class ExecutionSystem():
         self.depth_cam_pub = rospy.Publisher('depth_image', Image, queue_size=5)
         self.seg_cam_pub = rospy.Publisher('seg_image', Image, queue_size=5)
         self.js_pub = rospy.Publisher('joint_state', JointState, queue_size=5)
-        self.obj_pub = rospy.Publisher(
+        self.gt_obj_pub = rospy.Publisher(
             'object_ground_truth_state', ObjectGroundTruthState, queue_size=5
         )
+
+        self.obj_pub = rospy.Publisher('object_state', PercievedObject, queue_size=5)
+        self.rs_pub = rospy.Publisher('robot_state_publisher', RobotState, queue_size=5)
+
+        init_joints = [0]
+        init_joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # left
+        init_joints += [1.75, 0.8, 0.0, -0.66, 0.0, 0.0, 0.0]  # right
+        self.data.qpos[self.get_qpos_indices(self.mj_joint_names)] = init_joints
+        self.data.ctrl[self.get_ctrl_indices(self.mj_joint_names)] = init_joints
 
     def get_objq_indices(self, obj_name):
         jnt = self.model.joint(self.model.body(obj_name).jntadr[0])
@@ -111,7 +121,9 @@ class ExecutionSystem():
         return qvel_inds
 
     def get_ctrl_indices(self, joints):
-        ctrl_inds = np.array([self.model.joint(j).id for j in joints])
+        ctrl_inds = np.array(
+            [self.model.actuator(j.replace('joint_', '')).id for j in joints]
+        )
         return ctrl_inds
 
     def colliding_body_pairs(self):
@@ -144,15 +156,20 @@ class ExecutionSystem():
 
         epsilon = 2**-5
         joint_names = [self.robot_model_name + '/' + name for name in traj.joint_names]
+        print(joint_names, self.mj_joint_names)
+        print(joint_names == self.mj_joint_names)
         iqpos = self.get_qpos_indices(joint_names)
         ctrls = self.get_ctrl_indices(joint_names)
+        print(ctrls)
+        print(len(joint_names), len(self.mj_joint_names), len(ctrls))
         num_collision = 0
         for i in range(len(interpolated_pts)):
             pos = interpolated_pts[i]
             self.data.ctrl[ctrls] = pos  # position control
-            while np.linalg.norm(self.data.qpos[iqpos] - target) > epsilon:
+            while np.linalg.norm(self.data.qpos[iqpos] - pos) > epsilon:
+                print(np.linalg.norm(self.data.qpos[iqpos] - pos) > epsilon)
                 # self.step()
-                rospy.sleep(0.01)
+                # rospy.sleep(0.01)
                 if len(self.data.contact) > 1:
                     num_collision += 1
                     print("collision!:", self.colliding_body_pairs())
@@ -160,7 +177,19 @@ class ExecutionSystem():
         # self.rgb_img, self.depth_img, self.seg_img = self.camera.sense()
         return ExecuteTrajectoryResponse(num_collision, True)
 
-    def publish_image(self, timer_event):
+    def attach_object(self, req):
+        """
+        close or open the gripper
+        """
+        if req.attach == True:
+            # gripper is index 1 suction is 0
+            self.data.ctrl[1] = 255
+        else:
+            self.data.ctrl[1] = 0
+
+        return AttachObjectResponse(True)
+
+    def publish_image(self):
         """
         obtain image from mujoco and publish
         """
@@ -182,7 +211,7 @@ class ExecutionSystem():
         msg.header.stamp = rospy.Time.now()
         self.seg_cam_pub.publish(msg)
 
-    def publish_robot_state(self, timer_event):
+    def publish_robot_state(self):
         """
         obtain joint state from Mujoco and publish
         """
@@ -194,9 +223,15 @@ class ExecutionSystem():
         msg.position = self.data.qpos[iqpos]
         msg.velocity = self.data.qvel[iqvel]
         msg.header.stamp = rospy.Time.now()
-        self.js_pub.publish(msg)
+        # self.js_pub.publish(msg)
 
-    def publish_ground_truth_state(self, timer_event):
+        rs_msg = RobotState()
+        rs_msg.attached_obj = -1
+        rs_msg.joint_state = msg
+        rs_msg.header.stamp = rospy.Time.now()
+        self.rs_pub.publish(rs_msg)
+
+    def publish_ground_truth_state(self):
         names = []
         poses = []
         for i in range(self.model.njnt):
@@ -221,21 +256,88 @@ class ExecutionSystem():
         msg.header.stamp = rospy.Time.now()
         msg.id = names
         msg.pose = poses
-        self.obj_pub.publish(msg)
+        self.gt_obj_pub.publish(msg)
+
+    def publish_objects(self):
+        for i in range(self.model.njnt):
+            jnt = self.model.jnt(i)
+            name = self.model.jnt(i).name
+            if name[:5] == 'joint':
+                obj_msg = self.obj2msg(i)
+                self.obj_pub.publish(obj_msg)
+
+    def obj2msg(self, obj_id):
+        obj_msg = PercievedObject()
+        obj_msg.header.frame_id = 'world'
+        obj_msg.header.stamp = rospy.get_rostime()
+        obj_msg.name = f'{obj_id}'
+
+        jnt = self.model.jnt(obj_id)
+        iqpos = np.array(range(jnt.qposadr[0], jnt.qposadr[0] + len(jnt.qpos0)))
+        pos_quat = self.data.qpos[iqpos]
+        obj_msg.pose = Pose()
+        obj_msg.pose.position.x = pos_quat[0]
+        obj_msg.pose.position.y = pos_quat[1]
+        obj_msg.pose.position.z = pos_quat[2]
+        obj_msg.pose.orientation.w = pos_quat[3]
+        obj_msg.pose.orientation.x = pos_quat[4]
+        obj_msg.pose.orientation.y = pos_quat[5]
+        obj_msg.pose.orientation.z = pos_quat[6]
+        # obj_msg.mesh = Mesh()
+        obj_msg.solid = SolidPrimitive()
+        obj_msg.solid.dimensions = [0]
+
+        geom = self.model.geom(self.model.body(jnt.bodyid[0]).geomadr[0])
+        shape = geom.type[0]
+        size = geom.size
+
+        if shape == mujoco.mjtGeom.mjGEOM_MESH:
+            print(
+                "Element %s with geometry type %s not supported. Ignored." %
+                (object_id, shape)
+            )
+            return None
+        else:
+            SCALE = 1.0
+            obj_msg.type = PercievedObject.SOLID_PRIMITIVE
+            if shape == mujoco.mjtGeom.mjGEOM_BOX:
+                obj_msg.solid.type = SolidPrimitive.BOX
+                obj_msg.solid.dimensions = np.multiply(SCALE, 2 * size).tolist()
+            elif shape == mujoco.mjtGeom.mjGEOM_CYLINDER:
+                obj_msg.solid.type = SolidPrimitive.CYLINDER
+                obj_msg.solid.dimensions = np.multiply(SCALE, 2 * size).tolist()
+            elif shape == mujoco.mjtGeom.mjGEOM_SPHERE:
+                obj_msg.solid.type = SolidPrimitive.SPHERE
+                obj_msg.solid.dimensions = np.multiply(SCALE, 2 * size).tolist()
+            elif shape == mujoco.mjtGeom.mjGEOM_CAPSULE:
+                print(
+                    "Element %s with geometry type %s not supported. Ignored." %
+                    (object_id, shape)
+                )
+                return None
+            elif shape == mujoco.mjtGeom.mjGEOM_PLANE:
+                print(
+                    "Element %s with geometry type %s not supported. Ignored." %
+                    (object_id, shape)
+                )
+                return None
+
+        return obj_msg
+
+    def publish_all(self, timer_event):
+        self.publish_image()
+        self.publish_objects()
+        self.publish_robot_state()
 
     def run(self):
         """
         keep spinning and publishing to the ROS topics
         """
 
-        jsT = rospy.Timer(rospy.Duration(0.1), self.publish_robot_state)
-        imT = rospy.Timer(rospy.Duration(0.1), self.publish_image)
-        obT = rospy.Timer(rospy.Duration(0.1), self.publish_ground_truth_state)
-
+        timer = rospy.Timer(rospy.Duration(0.1), self.publish_all)
         while not rospy.is_shutdown():
             self.step()
-        jsT.shutdown()
-        # imT.shutdown()
+        timer.shutdown()
 
 
 if __name__ == "__main__":

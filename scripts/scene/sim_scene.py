@@ -18,7 +18,7 @@ class SimScene():
         pid = p.connect(PYBULLET_MODE)
 
         rp = rospkg.RosPack()
-        package_path = rp.get_path('vbcpm_execution_system')
+        package_path = rp.get_path('pracsys_ctvmp')
         urdf_path = os.path.join(package_path, scene_dict['robot']['urdf'])
         # joints = [0.] * 16
 

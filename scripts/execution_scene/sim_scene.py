@@ -20,8 +20,12 @@ from shape_msgs.msg import SolidPrimitive, Mesh, MeshTriangle
 
 import mujoco_viewer
 from dm_control import mujoco
-import problem_generation as prob_gen
 
+import toppra as ta
+import toppra.algorithm as ta_algo
+import toppra.constraint as ta_constraint
+
+import problem_generation as prob_gen
 from pracsys_vision_tamp_manipulation.msg import ObjectGroundTruthState, RobotState, PercievedObject
 from pracsys_vision_tamp_manipulation.srv import ExecuteTrajectory, ExecuteTrajectoryResponse, AttachObject, AttachObjectResponse
 
@@ -74,6 +78,7 @@ class ExecutionSystem():
         fixed_xml_str = re.sub('-[a-f0-9]+.stl', '.stl', world_model.to_xml_string())
         self.physics = mujoco.Physics.from_xml_string(fixed_xml_str, ASSETS)
         self.model = self.physics.model._model
+        self.dt = self.model.opt.timestep
         self.data = self.physics.data._data
         self.viewer = mujoco_viewer.MujocoViewer(self.model, self.data) if gui else None
 
@@ -107,6 +112,8 @@ class ExecutionSystem():
         self.data.qpos[self.get_qpos_indices(self.mj_joint_names)] = init_joints
         self.data.ctrl[self.get_ctrl_indices(self.mj_joint_names)] = init_joints
 
+        self.trajectory = []  # idle => not executing trajectory or other command
+
     def get_objq_indices(self, obj_name):
         jnt = self.model.joint(self.model.body(obj_name).jntadr[0])
         qpos_inds = np.array(range(jnt.qposadr[0], jnt.qposadr[0] + len(jnt.qpos0)))
@@ -120,9 +127,9 @@ class ExecutionSystem():
         qvel_inds = np.array([self.model.joint(j).dofadr[0] for j in joints])
         return qvel_inds
 
-    def get_ctrl_indices(self, joints):
+    def get_ctrl_indices(self, joints, repl=''):
         ctrl_inds = np.array(
-            [self.model.actuator(j.replace('joint_', '')).id for j in joints]
+            [self.model.actuator(j.replace('joint_', repl)).id for j in joints]
         )
         return ctrl_inds
 
@@ -136,43 +143,81 @@ class ExecutionSystem():
         return pairs
 
     def step(self):
-        # mujoco.mj_step(self.model, self.data)
-        self.physics.step()
+        mujoco.mj_step(self.model, self.data)
         if self.viewer is not None and self.viewer.is_alive:
             self.viewer.render()
+        self.do_traj()
+
+    def do_traj(self):
+        if len(self.trajectory) == 0:
+            iqpos = self.get_qpos_indices(self.mj_joint_names)
+            pctrl = self.get_ctrl_indices(self.mj_joint_names)
+            vctrl = self.get_ctrl_indices(self.mj_joint_names, 'v_')
+            # self.data.ctrl[pctrl] = self.data.qpos[iqpos]
+            self.data.ctrl[vctrl] = 0
+        else:
+            joint_names, position, velocity, time = self.trajectory.pop(0)
+            iqpos = self.get_qpos_indices(joint_names)
+            pctrl = self.get_ctrl_indices(joint_names)
+            vctrl = self.get_ctrl_indices(joint_names, 'v_')
+            self.data.ctrl[pctrl] = position
+            self.data.ctrl[vctrl] = velocity
 
     def execute_trajectory(self, req):
-        traj = req.trajectory  # sensor_msgs/JointTrajectory
-        points = traj.points
+        # sensor_msgs/JointTrajectory
+        points = req.trajectory.points
+        joint_names = [
+            self.robot_model_name + '/' + name for name in req.trajectory.joint_names
+        ]
 
-        step_sz = 1 * np.pi / 180
-        interpolated_pts = [points[0].positions]
-        for i in range(len(points) - 1):
-            pos1 = np.array(points[i].positions)
-            pos2 = np.array(points[i + 1].positions)
-            abs_change = np.abs(pos2 - pos1)
-            n_steps = int(np.ceil(abs_change.max() / step_sz))
-            interpolated_pts += np.linspace(pos1, pos2, n_steps + 1)[1:].tolist()
+        # find velocities for trajectories if none given
+        if not np.any(points[0].velocities):
+            speed = 15
+            vel_limit = [-speed * np.pi / 180, speed * np.pi / 180]
+            acc_limit = [-500. * np.pi / 180, 500. * np.pi / 180]
+            raw_plan = [p.positions for p in points]
 
-        epsilon = 2**-5
-        joint_names = [self.robot_model_name + '/' + name for name in traj.joint_names]
-        print(joint_names, self.mj_joint_names)
-        print(joint_names == self.mj_joint_names)
+            ss = np.linspace(0, 1, len(raw_plan))
+            path = ta.SplineInterpolator(ss, raw_plan)
+            vlims = [vel_limit] * len(raw_plan[0])
+            alims = [acc_limit] * len(raw_plan[0])
+            pc_vel = ta_constraint.JointVelocityConstraint(vlims)
+            pc_acc = ta_constraint.JointAccelerationConstraint(alims)
+            instance = ta_algo.TOPPRA([pc_vel, pc_acc], path)
+            jnt_traj = instance.compute_trajectory()
+            times = np.linspace(0, jnt_traj.duration, int(jnt_traj.duration / self.dt))
+            positions = jnt_traj(times)
+            velocities = jnt_traj(times, 1)
+        else:
+            times = np.zeros(len(points))
+            positions = np.zeros((len(points), len(points[0].positions)))
+            velocities = np.zeros((len(points), len(points[0].velocities)))
+            for i, p in enumerate(points):
+                times[i] = p.time_from_start
+                positions[i] = p.positions
+                velocities[i] = p.velocities
+
         iqpos = self.get_qpos_indices(joint_names)
-        ctrls = self.get_ctrl_indices(joint_names)
-        print(ctrls)
-        print(len(joint_names), len(self.mj_joint_names), len(ctrls))
+        pctrl = self.get_ctrl_indices(joint_names)
+        vctrl = self.get_ctrl_indices(joint_names, 'v_')
+        print(
+            len(self.mj_joint_names), len(joint_names), len(pctrl), len(vctrl),
+            len(iqpos)
+        )
         num_collision = 0
-        for i in range(len(interpolated_pts)):
-            pos = interpolated_pts[i]
-            self.data.ctrl[ctrls] = pos  # position control
-            while np.linalg.norm(self.data.qpos[iqpos] - pos) > epsilon:
-                print(np.linalg.norm(self.data.qpos[iqpos] - pos) > epsilon)
-                # self.step()
-                # rospy.sleep(0.01)
-                if len(self.data.contact) > 1:
-                    num_collision += 1
-                    print("collision!:", self.colliding_body_pairs())
+
+        self.trajectory = list(
+            zip([joint_names] * len(times), positions, velocities, times)
+        )
+
+        # for p, v, t in zip(positions, velocities, times):
+        #     self.data.ctrl[pctrl] = p  # position control
+        #     self.data.ctrl[vctrl] = v  # velocity control
+        while len(self.trajectory) > 0:
+            rospy.sleep(0.01)
+            if len(self.data.contact) > 1:
+                num_collision += 1
+                print("collision!:", len(self.colliding_body_pairs()))
 
         # self.rgb_img, self.depth_img, self.seg_img = self.camera.sense()
         return ExecuteTrajectoryResponse(num_collision, True)

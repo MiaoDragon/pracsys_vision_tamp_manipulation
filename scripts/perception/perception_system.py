@@ -404,7 +404,8 @@ class PerceptionSystem():
 
         # update each object's hide set
         for obj_i, obj_hide_list in object_hide_set.items():
-            self.objects[obj_i].update_obj_hide_set(obj_hide_list)
+            if obj_i in self.objects:
+                self.objects[obj_i].update_obj_hide_set(obj_hide_list)
 
 
         for obj_id in valid_objects:

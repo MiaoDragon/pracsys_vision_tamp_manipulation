@@ -31,6 +31,9 @@ def load_problem(scene_json, robot_xml, obj_poses, obj_shapes, obj_sizes):
     world_model = mjcf.from_xml_string(
         """
     <mujoco model="World">
+      <option>
+        <flag warmstart="disable" />
+      </option>
       <asset>
         <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
         <material name="grid" texture="grid" texrepeat="0.5 0.5" texuniform="true" specular="0" shininess="0" reflectance="0" emission="1" />

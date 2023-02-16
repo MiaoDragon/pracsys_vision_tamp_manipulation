@@ -249,6 +249,8 @@ class Robot():
             else:
                 joints.append(self.joint_vals[i])
 
+        self.joint_vals = joints
+
     def joint_dict_to_vals(self, joint_dict):
         joint_vals = []
         for i in range(len(self.joint_names)):

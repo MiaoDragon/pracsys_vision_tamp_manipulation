@@ -9,6 +9,7 @@ import glob
 import pickle
 import numpy as np
 import transformations as tf
+import xml.etree.ElementTree as ET
 
 import rospy
 import rospkg
@@ -55,28 +56,48 @@ class ExecutionSystem():
             self.robot_model_name + '/' + jn for jn in self.joint_names
         ]
         if trial is not None:
-            with open(trial, 'rb') as f:
-                data = pickle.load(f)
-                scene_f = data[0]
-                obj_poses = data[1]
-                obj_pcds = data[2]
-                obj_shapes = data[3]
-                obj_sizes = data[4]
-                # scene_f, obj_poses, obj_pcds, obj_shapes, obj_sizes, target_pose, target_pcd, target_obj_shape, target_obj_size = data
-            world_model = prob_gen.load_problem(
-                scene_f, robot_xml, obj_poses, obj_shapes, obj_sizes
-            )
+            if trial.split('.')[-1] == 'pkl':
+                with open(trial, 'rb') as f:
+                    data = pickle.load(f)
+                    scene_f = data[0]
+                    obj_poses = data[1]
+                    obj_pcds = data[2]
+                    obj_shapes = data[3]
+                    obj_sizes = data[4]
+                    # scene_f, obj_poses, obj_pcds, obj_shapes, obj_sizes, target_pose, target_pcd, target_obj_shape, target_obj_size = data
+                world_model = prob_gen.load_problem(
+                    scene_f, robot_xml, obj_poses, obj_shapes, obj_sizes
+                )
+            elif trial.split('.')[-1] == 'xml':
+                with open(trial) as f:
+                    xml_str = f.read()
+                xml_tree = ET.fromstring(xml_str)
 
         else:
             scene_f = scene
+            world_model = prob_gen.load_problem(scene_f, robot_xml, [], [], [])
 
+        scene_xml_str = re.sub('-[a-f0-9]+.stl', '.stl', world_model.to_xml_string())
+
+        scene_tree = ET.fromstring(scene_xml_str)
+        compiler = scene_tree.find('compiler')
+        if 'meshdir' in compiler.keys():
+            assets_dir = compiler.get('meshdir')
+        else:
+            assets_dir = '/'.join(robot_xml.split('/')[:-1]) + '/meshes/'
+
+        assets = scene_tree.find('asset')
         ASSETS = dict()
-        assets_dir = '/'.join(robot_xml.split('/')[:-1]) + '/meshes/'
-        for fname in glob.glob(assets_dir + '*.stl'):
-            with open(fname, 'rb') as f:
-                ASSETS[fname] = f.read()
-        fixed_xml_str = re.sub('-[a-f0-9]+.stl', '.stl', world_model.to_xml_string())
-        self.physics = mujoco.Physics.from_xml_string(fixed_xml_str, ASSETS)
+        for asset in assets:
+            if asset.tag == 'include':
+                continue
+            if 'file' in asset.keys():
+                fname = asset.get('file')
+                print(fname)
+                with open(assets_dir + '/' + fname, 'rb') as f:
+                    ASSETS[fname] = f.read()
+
+        self.physics = mujoco.Physics.from_xml_string(scene_xml_str, ASSETS)
         self.model = self.physics.model._model
         self.dt = self.model.opt.timestep
         self.data = self.physics.data._data
@@ -395,10 +416,10 @@ if __name__ == "__main__":
         sys.exit(-1)
     scene_or_trial = sys.argv[2].strip() if len(sys.argv) > 2 else None
     gui = sys.argv[3][0] in ('t', 'T', 'y', 'Y') if len(sys.argv) > 3 else False
-    trial = scene_or_trial if scene_or_trial.split('.')[-1] == 'pkl' else None
+    trial = scene_or_trial if scene_or_trial.split('.')[-1] in ('pkl', 'xml') else None
     scene = scene_or_trial if scene_or_trial.split('.')[-1] == 'json' else None
     if scene is None and trial is None:
-        print('Please specify json or pkl file.', file=sys.stderr)
+        print('Please specify json, pkl, or xml file.', file=sys.stderr)
         sys.exit(-1)
     execution_system = ExecutionSystem(
         robot_xml,

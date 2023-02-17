@@ -13,12 +13,16 @@ import random
 
 import rospkg
 import numpy as np
-import open3d as o3d
 import transformations as tf
 
 from dm_control import mjcf
-from utils.visual_utils import *
-# from utils.transform_utils import *
+
+import seaborn as sns
+import colorcet as cc
+
+
+def from_color_map(num, size):
+    return sns.color_palette(cc.glasbey, size)[num]
 
 
 def load_problem(scene_json, robot_xml, obj_poses, obj_shapes, obj_sizes):

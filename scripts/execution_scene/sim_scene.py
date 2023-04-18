@@ -185,6 +185,8 @@ class ExecutionSystem():
             self.data.ctrl[vctrl] = velocity
 
     def execute_trajectory(self, req):
+        with open('traj.pkl', 'wb') as f:
+            pickle.dump(req.trajectory,f)
         # sensor_msgs/JointTrajectory
         points = req.trajectory.points
         joint_names = [

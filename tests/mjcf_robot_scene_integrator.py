@@ -1,0 +1,1 @@
+../scripts/execution_scene/mjcf_robot_scene_integrator.py

@@ -1,0 +1,5 @@
+# control end-effector
+string name
+float64 control # 0 = closed/off, 255 = open/suction
+---
+bool success

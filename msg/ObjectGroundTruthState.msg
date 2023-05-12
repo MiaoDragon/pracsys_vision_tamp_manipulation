@@ -1,3 +1,4 @@
 std_msgs/Header header
-string[] id
+string[] name
+int32[] id  # body id
 geometry_msgs/Pose[] pose

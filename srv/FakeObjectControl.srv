@@ -1,0 +1,5 @@
+int32 obj_id
+geometry_msgs/Wrench wrench  # xfrc_applied: force+torque
+float32 duration
+---
+# no response

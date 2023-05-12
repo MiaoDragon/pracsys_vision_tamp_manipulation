@@ -1,0 +1,1 @@
+../scripts/execution_scene/motoman_node.py

@@ -30,6 +30,15 @@ add_message_files(
   FILES
   RobotState.msg
   PercievedObject.msg
+  VoxelTSDF.msg
+  ObjectTSDF.msg
+  ObjectTSDFs.msg
+  ObjectModel.msg
+  ObjectModels.msg
+  VoxelGridBool.msg
+  SceneOcclusion.msg
+  ObjectOcclusion.msg
+  ObjectOcclusions.msg
   ObjectGroundTruthState.msg
 )
 
@@ -37,8 +46,14 @@ add_service_files(
   DIRECTORY srv
   FILES
   AttachObject.srv
-  ExecuteTrajectory.srv
   TaskSolve.srv
+  EEControl.srv
+  GetObjectTSDFs.srv
+  GetObjectModels.srv
+  ExecuteTrajectory.srv
+  FakeObjectControl.srv
+  GetSceneOcclusion.srv
+  GetObjectOcclusions.srv
 )
 
 generate_messages(
